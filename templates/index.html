@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>拨云见策 - 专业量化交易分析平台</title>
+    <!-- 引入Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- 引入自定义CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <!-- 引入Animate.css -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+    <!-- 引入Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- 引入Chart.js热力图插件 -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-matrix@1.1.1/dist/chartjs-chart-matrix.min.js"></script>
+    <!-- 引入Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="finance-theme">
+    <div class="platform-header">
+        <div class="container">
+            <div class="header-content">
+                <div class="logo-section">
+                    <h1 class="platform-title animate__animated animate__fadeInDown">
+                        <i class="fas fa-chart-line"></i> 拨云见策
+                    </h1>
+                    <p class="platform-subtitle">专业量化交易分析平台</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container main-content py-4">
+        <!-- 操作面板 -->
+        <div class="operation-panel animate__animated animate__fadeInUp">
+            <form id="forexForm" class="mb-4">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="currency_pair" class="form-label">
+                                <i class="fas fa-exchange-alt"></i> 交易品种
+                            </label>
+                            <select id="currency_pair" class="form-select custom-select" required>
+                                <option value="">请选择交易品种</option>
+                                <option value="USD/EUR">美元/欧元 (USD/EUR)</option>
+                                <option value="USD/JPY">美元/日元 (USD/JPY)</option>
+                                <option value="GBP/USD">英镑/美元 (GBP/USD)</option>
+                                <option value="AUD/USD">澳元/美元 (AUD/USD)</option>
+                                <option value="USD/CHF">美元/瑞郎 (USD/CHF)</option>
+                                <option value="NZD/USD">新西兰元/美元 (NZD/USD)</option>
+                                <option value="USD/CAD">美元/加元 (USD/CAD)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="optimization_method" class="form-label">
+                                <i class="fas fa-cogs"></i> 策略优化
+                            </label>
+                            <select id="optimization_method" class="form-select custom-select">
+                                <option value="none">标准策略</option>
+                                <option value="grid_search">网格优化</option>
+                                <option value="random_search">随机优化</option>
+                                <option value="bayesian_optimization">贝叶斯优化</option>
+                                <option value="genetic_algorithm">遗传算法优化</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="action-buttons mt-4">
+                    <button type="submit" class="btn btn-primary action-btn" data-action="loadData">
+                        <i class="fas fa-database"></i> 加载数据
+                    </button>
+                    <button type="submit" class="btn btn-primary action-btn" data-action="generateSignals">
+                        <i class="fas fa-signal"></i> 生成信号
+                    </button>
+                    <button type="submit" class="btn btn-primary action-btn" data-action="runOptimizedBacktest">
+                        <i class="fas fa-chart-bar"></i> 策略回测
+                    </button>
+                    <button type="submit" class="btn btn-primary action-btn" data-action="explain_signal">
+                        <i class="fas fa-brain"></i> 策略解析
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- 欢迎区域 -->
+        <div id="welcomeContainer" class="welcome-container text-center animate__animated animate__fadeIn">
+            <div class="welcome-text">
+                <h2 class="artistic-text primary-text">智者远虑 · 稳健制胜</h2>
+                <h3 class="artistic-text secondary-text">以数据为基石 用智慧创造价值</h3>
+                <p class="artistic-text description-text">每一次决策，都建立在深度分析的根基之上</p>
+            </div>
+        </div>
+
+        <!-- 加载动画 -->
+        <div id="loading" class="loading-container" style="display: none;">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">加载中...</span>
+            </div>
+            <p class="loading-text">数据分析中，请稍候...</p>
+        </div>
+
+        <!-- 提示信息 -->
+        <div id="error" class="alert-container mt-4" style="display: none;"></div>
+        <div id="success" class="alert-container mt-4" style="display: none;"></div>
+
+        <!-- 内容显示区域 -->
+        <div id="contentContainer" class="content-display mt-4"></div>
+    </div>
+
+    <!-- 引入Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- 自定义JS -->
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

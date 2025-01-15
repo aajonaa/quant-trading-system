@@ -1,0 +1,974 @@
+/* 自定义样式 */
+body.bg-gradient {
+    background: linear-gradient(135deg, #f5f7fa, #c3cfe2);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Arial', sans-serif;
+}
+
+.container {
+    max-width: 1200px;
+    width: 100%;
+    padding: 20px;
+}
+
+h1 {
+    font-size: 2.5rem;
+    font-weight: bold;
+    color: #2c3e50;
+    margin-bottom: 1.5rem;
+}
+
+.card {
+    border: none;
+    border-radius: 15px;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    background: #ffffff;
+    margin-bottom: 20px;
+}
+
+.card:hover {
+    transform: translateY(-10px);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.2);
+}
+
+.btn-primary {
+    background-color: #3498db;
+    border: none;
+    padding: 10px 20px;
+    font-size: 1rem;
+    font-weight: bold;
+    border-radius: 8px;
+    transition: background-color 0.3s ease, transform 0.3s ease;
+}
+
+.btn-primary:hover {
+    background-color: #2980b9;
+    transform: scale(1.05);
+}
+
+#tableContainer .card {
+    margin-bottom: 20px; /* 添加底部外边距 */
+}
+
+#tableContainer .card-body {
+    padding: 20px; /* 调整内边距 */
+}
+
+#tableContainer .table-responsive table {
+    width: 100%; /* 表格宽度占满容器 */
+    border-collapse: collapse; /* 合并边框 */
+}
+
+#tableContainer .table-responsive th,
+#tableContainer .table-responsive td {
+    padding: 12px; /* 调整单元格内边距 */
+    text-align: left; /* 文本左对齐 */
+    border-bottom: 1px solid #ddd; /* 添加底部边框 */
+}
+
+#loading .spinner-border {
+    width: 3rem;
+    height: 3rem;
+}
+
+.alert {
+    margin-top: 20px;
+    border-radius: 10px;
+    padding: 15px;
+    font-size: 1rem;
+}
+
+/* 动画效果 */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fadeIn {
+    animation: fadeIn 0.5s ease-out;
+}
+
+#tableContainer .table-responsive {
+    max-height: 400px;
+    overflow-y: auto;
+    border-radius: 10px;
+    scroll-behavior: smooth;
+}
+
+.form-container {
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    background: #ffffff;
+    padding: 20px;
+    border-radius: 15px;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+}
+
+/* 添加图表样式 */
+.chart-container {
+    position: relative;
+    height: 300px;
+    margin-bottom: 1rem;
+}
+
+canvas {
+    width: 100% !important;
+    height: 400px !important;
+}
+
+.card {
+    margin-bottom: 20px;
+}
+
+/* 添加相关性热图样式 */
+.correlation-heatmap {
+    overflow-x: auto;
+}
+
+.correlation-heatmap table {
+    width: 100%;
+    margin-bottom: 1rem;
+}
+
+.correlation-heatmap td, 
+.correlation-heatmap th {
+    padding: 0.5rem;
+    text-align: center;
+    font-size: 0.9rem;
+}
+
+.correlation-heatmap th {
+    background-color: #f8f9fa;
+}
+
+/* 风险指标表格样式 */
+.risk-metrics table {
+    width: 100%;
+    margin-bottom: 1rem;
+}
+
+.risk-metrics td, 
+.risk-metrics th {
+    padding: 0.5rem;
+    text-align: left;
+}
+
+/* 特征重要性图表容器样式 */
+.feature-importance-container {
+    height: 400px;
+    margin-top: 20px;
+}
+
+/* 表格容器样式 */
+.table-responsive {
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+/* 表格样式 */
+.table {
+    margin-bottom: 0;
+}
+
+/* 卡片样式 */
+.card {
+    margin-bottom: 20px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    border-radius: 10px;
+}
+
+.card-title {
+    color: #ffd700;
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.8rem;
+    border-bottom: 2px solid rgba(255, 215, 0, 0.3);
+    position: relative;
+}
+
+.card-title::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: -2px;
+    width: 60px;
+    height: 2px;
+    background: linear-gradient(90deg, #ffd700, transparent);
+}
+
+/* 信号标签样式 */
+.badge {
+    font-size: 0.9em;
+    padding: 5px 10px;
+}
+
+/* 解释文本样式 */
+.explanation-text {
+    font-size: 1.1em;
+    line-height: 1.6;
+    color: #2c3e50;
+}
+
+/* 相关性热图样式 */
+.correlation-heatmap {
+    overflow-x: auto;
+}
+
+.correlation-heatmap table {
+    margin: 0 auto;
+}
+
+.correlation-heatmap th,
+.correlation-heatmap td {
+    text-align: center;
+    padding: 8px;
+    font-size: 0.9em;
+}
+
+/* 风险指标表格样式 */
+.risk-metrics table {
+    margin: 0 auto;
+}
+
+.risk-metrics th {
+    width: 40%;
+}
+
+/* 特征重要性图表容器样式 */
+.feature-importance-container {
+    height: 400px;
+    margin-top: 20px;
+}
+
+/* 动画效果 */
+.fade-in {
+    animation: fadeIn 0.5s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* 卡片内的图表样式 */
+.card canvas {
+    margin: 10px 0;
+}
+
+/* 响应式布局调整 */
+@media (max-width: 768px) {
+    canvas {
+        height: 300px !important;
+    }
+}
+
+/* 图表容器样式优化 */
+.card .row {
+    margin: 0 -10px;
+}
+
+.card .col-md-6 {
+    padding: 10px;
+}
+
+.card canvas {
+    min-height: 300px;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .card canvas {
+        min-height: 250px;
+    }
+}
+
+/* 相关性矩阵样式 */
+.correlation-legend {
+    padding: 20px;
+    background: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin-top: 20px;
+}
+
+.correlation-scale {
+    margin: 15px 0;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.correlation-gradient {
+    height: 20px;
+    margin: 10px 0;
+    background: linear-gradient(to right,
+        rgb(30, 144, 255),  /* 深蓝色 */
+        rgb(255, 255, 255), /* 白色 */
+        rgb(220, 20, 60)    /* 深红色 */
+    );
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.legend-label {
+    font-size: 0.9em;
+    color: #333;
+    font-weight: 500;
+}
+
+.legend-value {
+    font-size: 0.8em;
+    color: #666;
+}
+
+/* 相关性矩阵容器样式 */
+.correlation-container {
+    background: rgba(20, 23, 36, 0.95);
+    border-radius: 12px;
+    padding: 2rem;
+    margin-top: 1.5rem;
+    border: 1px solid rgba(255, 215, 0, 0.1);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+#correlationHeatmap {
+    margin: 0 auto;
+    max-width: 800px;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .correlation-legend {
+        padding: 15px;
+    }
+    
+    .correlation-gradient {
+        height: 15px;
+    }
+    
+    .legend-label,
+    .legend-value {
+        font-size: 0.8em;
+    }
+}
+
+/* 欢迎区域样式 */
+.welcome-container {
+    padding: 40px 20px;
+    margin: 30px 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.9), rgba(255,255,255,0.7));
+    border-radius: 15px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    backdrop-filter: blur(10px);
+}
+
+.welcome-text {
+    transform: translateY(-10px);
+}
+
+.artistic-text {
+    font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+    margin: 0;
+    padding: 15px 0;
+    background: linear-gradient(120deg, #2c3e50, #3498db);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+    letter-spacing: 2px;
+}
+
+.primary-text {
+    font-size: 2.5em;
+    font-weight: 700;
+    margin-bottom: 20px;
+}
+
+.secondary-text {
+    font-size: 1.8em;
+    font-weight: 600;
+    background: linear-gradient(120deg, #2980b9, #16a085);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin: 15px 0;
+}
+
+.description-text {
+    font-size: 1.2em;
+    font-weight: 500;
+    color: #34495e;
+    margin-top: 15px;
+    background: linear-gradient(120deg, #34495e, #7f8c8d);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .primary-text {
+        font-size: 2em;
+    }
+    
+    .secondary-text {
+        font-size: 1.5em;
+    }
+    
+    .description-text {
+        font-size: 1.1em;
+    }
+    
+    .welcome-container {
+        padding: 30px 15px;
+    }
+}
+
+/* 金融主题基础样式 */
+.finance-theme {
+    background: linear-gradient(135deg, #1a237e 0%, #121858 100%);
+    color: #ffffff;
+    font-family: "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* 平台头部样式 */
+.platform-header {
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(10px);
+    padding: 2rem 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    margin-bottom: 2rem;
+}
+
+.header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.logo-section {
+    text-align: center;
+}
+
+.platform-title {
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin: 0;
+    background: linear-gradient(120deg, #ffd700, #ffa500);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.platform-subtitle {
+    font-size: 1.2rem;
+    color: #e0e0e0;
+    margin-top: 0.5rem;
+    letter-spacing: 1px;
+}
+
+/* 主要内容区域 */
+.main-content {
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 15px;
+    padding: 2rem;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+/* 操作面板样式 */
+.operation-panel {
+    background: rgba(24, 28, 47, 0.8);
+    border-radius: 12px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.form-label {
+    color: #e0e0e0;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+}
+
+.form-label i {
+    margin-right: 0.5rem;
+}
+
+.custom-select {
+    background-color: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    transition: all 0.3s ease;
+}
+
+.custom-select:focus {
+    background-color: rgba(0, 0, 0, 0.3);
+    border-color: #ffd700;
+    box-shadow: 0 0 0 0.25rem rgba(255, 215, 0, 0.15);
+    color: #ffffff;
+}
+
+.custom-select option {
+    background-color: #1a1f35;
+    color: #ffffff;
+}
+
+/* 按钮样式 */
+.action-buttons {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.action-btn {
+    background: linear-gradient(135deg, #ffd700, #ffa500);
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    color: #000000;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    text-shadow: none;
+}
+
+.action-btn:hover {
+    background: linear-gradient(135deg, #ffa500, #ff8c00);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(255, 215, 0, 0.3);
+}
+
+.action-btn i {
+    margin-right: 0.5rem;
+}
+
+/* 欢迎区域样式 */
+.welcome-container {
+    background: rgba(24, 28, 47, 0.8);
+    border-radius: 15px;
+    padding: 3rem 2rem;
+    margin: 2rem 0;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.artistic-text {
+    font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+    margin: 0;
+    padding: 15px 0;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.primary-text {
+    font-size: 2.8em;
+    font-weight: 700;
+    background: linear-gradient(120deg, #ffd700, #ffa500);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 1.5rem;
+}
+
+.secondary-text {
+    font-size: 1.8em;
+    font-weight: 600;
+    background: linear-gradient(120deg, #e0e0e0, #ffffff);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin: 1rem 0;
+}
+
+.description-text {
+    font-size: 1.2em;
+    font-weight: 500;
+    color: #cccccc;
+    margin-top: 1rem;
+    letter-spacing: 1px;
+}
+
+/* 加载动画容器 */
+.loading-container {
+    text-align: center;
+    padding: 2rem;
+    background: rgba(24, 28, 47, 0.8);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.loading-text {
+    color: #e0e0e0;
+    margin-top: 1rem;
+    font-size: 1.1rem;
+}
+
+/* 提示信息容器 */
+.alert-container {
+    border-radius: 8px;
+    padding: 1rem;
+    margin-top: 1rem;
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(10px);
+}
+
+/* 内容显示区域 */
+.content-display {
+    background: rgba(24, 28, 47, 0.8);
+    border-radius: 12px;
+    padding: 2rem;
+    margin-top: 2rem;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* 图表容器样式 */
+.chart-container {
+    background: rgba(24, 28, 47, 0.9);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .platform-title {
+        font-size: 2rem;
+    }
+    
+    .platform-subtitle {
+        font-size: 1rem;
+    }
+    
+    .action-buttons {
+        justify-content: center;
+    }
+    
+    .action-btn {
+        width: 100%;
+    }
+    
+    .primary-text {
+        font-size: 2em;
+    }
+    
+    .secondary-text {
+        font-size: 1.5em;
+    }
+    
+    .description-text {
+        font-size: 1.1em;
+    }
+}
+
+/* 数据表格样式 */
+.table {
+    color: #ffffff;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.table th {
+    background: rgba(0, 0, 0, 0.3);
+    border-color: rgba(255, 255, 255, 0.1);
+    font-weight: 600;
+    color: #ffd700;
+}
+
+.table td {
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.table-striped tbody tr:nth-of-type(odd) {
+    background-color: rgba(255, 255, 255, 0.02);
+}
+
+/* 卡片样式 */
+.card {
+    background: rgba(24, 28, 47, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+}
+
+.card-header {
+    background: rgba(0, 0, 0, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.card-body {
+    color: #ffffff;
+}
+
+/* 图表样式优化 */
+canvas {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+/* 相关性矩阵样式 */
+.correlation-container {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-top: 1.5rem;
+}
+
+.correlation-legend {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-top: 1rem;
+}
+
+.correlation-gradient {
+    height: 20px;
+    background: linear-gradient(to right,
+        rgba(30, 144, 255, 0.8),
+        rgba(255, 255, 255, 0.8),
+        rgba(220, 20, 60, 0.8)
+    );
+    border-radius: 4px;
+    margin: 0.5rem 0;
+}
+
+/* 动画效果 */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in {
+    animation: fadeIn 0.5s ease-out;
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.2);
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 215, 0, 0.3);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 215, 0, 0.5);
+}
+
+/* 相关系数矩阵样式优化 */
+.correlation-container {
+    background: rgba(20, 23, 36, 0.95);
+    border-radius: 12px;
+    padding: 2rem;
+    margin-top: 1.5rem;
+    border: 1px solid rgba(255, 215, 0, 0.1);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.correlation-matrix {
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin: 1rem 0;
+}
+
+.correlation-legend {
+    background: rgba(20, 23, 36, 0.95);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-top: 1rem;
+    border: 1px solid rgba(255, 215, 0, 0.1);
+}
+
+.correlation-scale {
+    background: rgba(0, 0, 0, 0.2);
+    padding: 1rem;
+    border-radius: 8px;
+    margin: 1rem 0;
+}
+
+.correlation-gradient {
+    height: 20px;
+    background: linear-gradient(to right,
+        rgba(220, 20, 60, 0.9),  /* 深红色（负相关） */
+        rgba(255, 255, 255, 0.9),  /* 白色（无相关） */
+        rgba(255, 215, 0, 0.9)    /* 金色（正相关） */
+    );
+    border-radius: 4px;
+    margin: 0.8rem 0;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.correlation-labels {
+    display: flex;
+    justify-content: space-between;
+    color: #e0e0e0;
+    font-size: 0.9rem;
+    margin-top: 0.5rem;
+}
+
+/* 策略解析样式优化 */
+.strategy-analysis {
+    background: rgba(20, 23, 36, 0.95);
+    border-radius: 12px;
+    padding: 2rem;
+    margin-top: 1.5rem;
+    border: 1px solid rgba(255, 215, 0, 0.1);
+}
+
+.analysis-content {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin: 1rem 0;
+    color: #e0e0e0;
+    line-height: 1.8;
+}
+
+.analysis-highlight {
+    color: #ffd700;
+    font-weight: 500;
+}
+
+/* 数据表格样式优化 */
+.table-container {
+    background: rgba(20, 23, 36, 0.95);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-top: 1.5rem;
+    border: 1px solid rgba(255, 215, 0, 0.1);
+}
+
+.table {
+    color: #e0e0e0;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    overflow: hidden;
+    margin: 0;
+}
+
+.table thead th {
+    background: rgba(0, 0, 0, 0.4);
+    color: #ffd700;
+    font-weight: 600;
+    padding: 1rem;
+    border-bottom: 2px solid rgba(255, 215, 0, 0.1);
+}
+
+.table tbody td {
+    padding: 0.8rem 1rem;
+    border-color: rgba(255, 255, 255, 0.05);
+}
+
+/* 图表容器样式优化 */
+.chart-container {
+    background: rgba(20, 23, 36, 0.95);
+    border-radius: 12px;
+    padding: 2rem;
+    margin-bottom: 1.5rem;
+    border: 1px solid rgba(255, 215, 0, 0.1);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.chart-header {
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid rgba(255, 215, 0, 0.1);
+}
+
+.chart-title {
+    color: #ffd700;
+    font-size: 1.3rem;
+    font-weight: 600;
+    margin: 0;
+}
+
+.chart-subtitle {
+    color: #e0e0e0;
+    font-size: 0.9rem;
+    margin-top: 0.5rem;
+    opacity: 0.8;
+}
+
+/* 卡片内容区域优化 */
+.card-body {
+    color: #e0e0e0;
+    padding: 1.5rem;
+}
+
+.card-section {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin: 1rem 0;
+}
+
+.section-title {
+    color: #ffd700;
+    font-size: 1.2rem;
+    font-weight: 500;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid rgba(255, 215, 0, 0.2);
+}
+
+/* 数值显示优化 */
+.value-display {
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 6px;
+    padding: 0.8rem 1.2rem;
+    margin: 0.5rem 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.value-label {
+    color: #e0e0e0;
+    font-size: 0.9rem;
+}
+
+.value-number {
+    color: #ffd700;
+    font-size: 1.1rem;
+    font-weight: 500;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .card-title {
+        font-size: 1.3rem;
+    }
+    
+    .chart-title {
+        font-size: 1.1rem;
+    }
+    
+    .section-title {
+        font-size: 1.1rem;
+    }
+    
+    .correlation-container,
+    .strategy-analysis,
+    .chart-container {
+        padding: 1.5rem;
+    }
+}
