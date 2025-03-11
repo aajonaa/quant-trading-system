@@ -264,45 +264,52 @@ class HybridForexModel:
             return None
 
     def _create_transformer_model(self, n_heads=4, ff_dim=64, learning_rate=0.001, dropout_rate=0.3):
-        """创建Transformer模型"""
+        """创建改进的Transformer模型"""
         try:
             # 序列输入
             seq_input = Input(shape=(None, 1))
-
-            # 自注意力层
+            
+            # 位置编码
             x = seq_input
-            x = LayerNormalization(epsilon=1e-6)(x)
-            attn_output = MultiHeadAttention(
-                num_heads=n_heads, key_dim=ff_dim//n_heads
-            )(x, x)
-            x = Dropout(dropout_rate)(attn_output)
-            x = Add()([x, attn_output])
-
-            # 前馈网络
-            x = LayerNormalization(epsilon=1e-6)(x)
-            x = Dense(ff_dim, activation='relu')(x)
-            x = Dropout(dropout_rate)(x)
-            x = Dense(1)(x)
-
+            
+            # 多层Transformer块
+            for _ in range(2):  # 增加到2层
+                # 自注意力层
+                x = LayerNormalization(epsilon=1e-6)(x)
+                attn_output = MultiHeadAttention(
+                    num_heads=n_heads, 
+                    key_dim=ff_dim//n_heads,
+                    dropout=dropout_rate  # 添加注意力dropout
+                )(x, x)
+                x = Dropout(dropout_rate)(attn_output)
+                x = Add()([x, attn_output])
+                
+                # 前馈网络
+                x = LayerNormalization(epsilon=1e-6)(x)
+                ffn = Dense(ff_dim*4, activation='relu')(x)  # 增加中间层维度
+                ffn = Dropout(dropout_rate)(ffn)
+                ffn = Dense(ff_dim)(ffn)
+                x = Add()([x, ffn])
+            
             # 全局池化
             x = GlobalAveragePooling1D()(x)
-
-            # 输出层
+            
+            # 分类头
+            x = Dense(ff_dim, activation='relu')(x)
+            x = Dropout(dropout_rate)(x)
+            x = Dense(ff_dim//2, activation='relu')(x)
             output = Dense(3, activation='softmax')(x)
-
-            # 创建模型
+            
             model = Model(inputs=seq_input, outputs=output)
-
-            # 编译模型
             optimizer = Adam(learning_rate=learning_rate)
             model.compile(
                 optimizer=optimizer,
                 loss='categorical_crossentropy',
                 metrics=['accuracy']
             )
-
+            
             return model
-
+            
         except Exception as e:
             self.logger.error(f"创建Transformer模型失败: {str(e)}")
             return None
@@ -398,8 +405,22 @@ class HybridForexModel:
                     history = model.fit(
                         [X_seq, X_static],
                         y_multi[step],
-                        epochs=50,
+                        epochs=100,
                         batch_size=32,
+                        validation_split=0.2,
+                        callbacks=[
+                            tf.keras.callbacks.EarlyStopping(
+                                monitor='val_loss',
+                                patience=10,
+                                restore_best_weights=True
+                            ),
+                            tf.keras.callbacks.ReduceLROnPlateau(
+                                monitor='val_loss',
+                                factor=0.5,
+                                patience=5,
+                                min_lr=1e-6
+                            )
+                        ],
                         verbose=0
                     )
 
@@ -540,7 +561,6 @@ class HybridForexModel:
     def _pso_optimize(self, model_name, X_train, y_train, X_val, y_val):
         """使用PSO优化模型超参数"""
         try:
-            # 修改参数范围
             param_bounds = {
                 'rf': {
                     'n_estimators': (100, 300),
@@ -557,20 +577,20 @@ class HybridForexModel:
                     'C': (0.1, 5.0)
                 },
                 'cnn_rnn': {
-                    'n_filters': (32, 128),
-                    'n_lstm_units': (32, 128),
-                    'learning_rate': (0.0001, 0.01),
+                    'n_filters': (32, 256),
+                    'n_lstm_units': (32, 256),
+                    'learning_rate': (0.00001, 0.01),
                     'dropout_rate': (0.1, 0.5)
                 },
                 'deep_cnn': {
-                    'n_filters': (32, 128),
-                    'learning_rate': (0.0001, 0.01),
+                    'n_filters': (32, 256),
+                    'learning_rate': (0.00001, 0.01),
                     'dropout_rate': (0.1, 0.5)
                 },
                 'transformer': {
-                    'n_heads': (4, 8),
-                    'ff_dim': (32, 128),
-                    'learning_rate': (0.0001, 0.01),
+                    'n_heads': (2, 16),
+                    'ff_dim': (32, 256),
+                    'learning_rate': (0.00001, 0.01),
                     'dropout_rate': (0.1, 0.5)
                 }
             }
@@ -596,9 +616,9 @@ class HybridForexModel:
                     self.w = 0.7
                     self.c1 = 1.5
                     self.c2 = 1.5
-                    self.initialize_particles()
+                    self._initialize_particles()
 
-                def initialize_particles(self):
+                def _initialize_particles(self):
                     for _ in range(self.n_particles):
                         position = {}
                         velocity = {}
@@ -613,26 +633,59 @@ class HybridForexModel:
                         self.velocities.append(velocity)
                         self.best_positions.append(position.copy())
 
-                def optimize(self, X_train, y_train, X_val, y_val, n_iterations=5):
+                def _update_velocity_and_position(self, i):
+                    """更新粒子的速度和位置"""
+                    for param in self.param_bounds.keys():
+                        bounds = self.param_bounds[param]
+                        r1, r2 = np.random.rand(2)
+
+                        # 更新速度
+                        self.velocities[i][param] = (
+                            self.w * self.velocities[i][param] +
+                            self.c1 * r1 * (self.best_positions[i][param] - self.positions[i][param]) +
+                            self.c2 * r2 * (self.global_best_position[param] - self.positions[i][param])
+                        )
+
+                        # 更新位置
+                        self.positions[i][param] += self.velocities[i][param]
+
+                        # 确保在边界内
+                        if isinstance(bounds[0], int):
+                            self.positions[i][param] = int(np.clip(
+                                self.positions[i][param], bounds[0], bounds[1]
+                            ))
+                        else:
+                            self.positions[i][param] = np.clip(
+                                self.positions[i][param], bounds[0], bounds[1]
+                            )
+
+                def evaluate_model(self, model, X_train, y_train, X_val, y_val):
+                    if self.is_dl:
+                        # 深度学习模型评估
+                        history = model.fit(
+                            X_train, y_train,
+                            epochs=10,
+                            batch_size=32,
+                            validation_data=(X_val, y_val),
+                            verbose=0
+                        )
+                        # 使用验证集准确率作为得分
+                        val_pred = model.predict(X_val)
+                        val_pred_classes = np.argmax(val_pred, axis=1)
+                        val_true_classes = np.argmax(y_val, axis=1)
+                        score = (val_pred_classes == val_true_classes).mean()
+                    else:
+                        # 机器学习模型评估
+                        model.fit(X_train, y_train)
+                        score = (model.predict(X_val) == y_val).mean()
+                    return score
+
+                def optimize(self, X_train, y_train, X_val, y_val, n_iterations=1):
                     for _ in range(n_iterations):
                         for i in range(self.n_particles):
                             # 创建并评估模型
                             model = self.model_creator(**self.positions[i])
-                            
-                            if self.is_dl:
-                                # 深度学习模型训练
-                                history = model.fit(
-                                    X_train, y_train,
-                                    epochs=10,
-                                    batch_size=32,
-                                    validation_data=(X_val, y_val),
-                                    verbose=0
-                                )
-                                score = history.history['val_accuracy'][-1]
-                            else:
-                                # 机器学习模型训练
-                                model.fit(X_train, y_train)
-                                score = (model.predict(X_val) == y_val).mean()
+                            score = self.evaluate_model(model, X_train, y_train, X_val, y_val)
 
                             # 更新个体最优
                             if score > self.best_scores[i]:
@@ -645,31 +698,9 @@ class HybridForexModel:
                                     self.global_best_position = self.positions[i].copy()
 
                             # 更新速度和位置
-                            for param in self.param_bounds.keys():
-                                bounds = self.param_bounds[param]
-                                r1, r2 = np.random.rand(2)
+                            self._update_velocity_and_position(i)
 
-                                # 更新速度
-                                self.velocities[i][param] = (
-                                    self.w * self.velocities[i][param] +
-                                    self.c1 * r1 * (self.best_positions[i][param] - self.positions[i][param]) +
-                                    self.c2 * r2 * (self.global_best_position[param] - self.positions[i][param])
-                                )
-
-                                # 更新位置
-                                self.positions[i][param] += self.velocities[i][param]
-
-                                # 确保在边界内
-                                if isinstance(bounds[0], int):
-                                    self.positions[i][param] = int(np.clip(
-                                        self.positions[i][param], bounds[0], bounds[1]
-                                    ))
-                                else:
-                                    self.positions[i][param] = np.clip(
-                                        self.positions[i][param], bounds[0], bounds[1]
-                                    )
-
-                        return self.global_best_position, self.global_best_score
+                    return self.global_best_position, self.global_best_score
 
             # 创建PSO优化器
             pso = ParticleSwarmOptimizer(
@@ -680,23 +711,7 @@ class HybridForexModel:
             )
 
             # 运行优化
-            if is_dl:
-                # 深度学习模型需要重塑数据
-                X_train_reshaped = X_train.reshape(-1, X_train.shape[1], 1)
-                X_val_reshaped = X_val.reshape(-1, X_val.shape[1], 1)
-                y_train_cat = to_categorical(y_train + 1)
-                y_val_cat = to_categorical(y_val + 1)
-                best_params, best_score = pso.optimize(
-                    X_train_reshaped, y_train_cat,
-                    X_val_reshaped, y_val_cat,
-                    n_iterations=1
-                )
-            else:
-                best_params, best_score = pso.optimize(
-                    X_train, y_train,
-                    X_val, y_val,
-                    n_iterations=1
-                )
+            best_params, best_score = pso.optimize(X_train, y_train, X_val, y_val, n_iterations=1)
 
             self.logger.info(f"\nPSO优化结果 ({model_name}):")
             self.logger.info(f"最佳参数: {best_params}")
@@ -947,9 +962,22 @@ def main():
                 # 训练模型
                 history = dl_model.fit(
                     X_train_reshaped, y_train_cat,
-                    epochs=50,
+                    epochs=100,  # 增加训练轮数
                     batch_size=32,
                     validation_split=0.2,
+                    callbacks=[
+                        tf.keras.callbacks.EarlyStopping(
+                            monitor='val_loss',
+                            patience=10,
+                            restore_best_weights=True
+                        ),
+                        tf.keras.callbacks.ReduceLROnPlateau(
+                            monitor='val_loss',
+                            factor=0.5,
+                            patience=5,
+                            min_lr=1e-6
+                        )
+                    ],
                     verbose=0
                 )
 
@@ -1004,7 +1032,7 @@ def main():
 
         # 输出性能
         logging.info(f"\n集成模型训练集准确率: {train_accuracy:.4f}")
-        logging.info(f"集成模型测试集准确率: {ensemble_accuracy:.4f}")
+        logging.info(f"\n集成模型测试集准确率: {ensemble_accuracy:.4f}")
         logging.info("\n分类报告:")
         logging.info(model._format_classification_report(y_test, ensemble_pred))
 
