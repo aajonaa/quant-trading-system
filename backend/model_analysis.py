@@ -3,7 +3,7 @@ import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import SVC
 from keras.layers import Input, Conv1D, BatchNormalization, LSTM, Dense, MaxPooling1D, concatenate, Dropout, \
-    GlobalAveragePooling1D, LayerNormalization, Bidirectional
+    GlobalAveragePooling1D, LayerNormalization, Bidirectional, MultiHeadAttention, Add
 from keras.models import Model
 import tensorflow as tf
 import pandas as pd
@@ -165,16 +165,16 @@ class HybridForexModel:
             self.logger.error(f"创建KELM模型失败: {str(e)}")
             return None
 
-    def _create_cnn_rnn_model(self):
+    def _create_cnn_rnn_model(self, n_filters=64, n_lstm_units=64, learning_rate=0.001, dropout_rate=0.3):
         """创建CNN-RNN混合模型"""
         try:
             # 序列输入
-            seq_input = Input(shape=(None, 1))  # 修改输入形状
+            seq_input = Input(shape=(None, 1))
 
             # CNN部分
-            conv1 = Conv1D(64, 3, padding='same', activation='relu')(seq_input)
+            conv1 = Conv1D(n_filters, 3, padding='same', activation='relu')(seq_input)
             conv1 = BatchNormalization()(conv1)
-            conv2 = Conv1D(32, 5, padding='same', activation='relu')(seq_input)
+            conv2 = Conv1D(n_filters//2, 5, padding='same', activation='relu')(seq_input)
             conv2 = BatchNormalization()(conv2)
 
             # 合并CNN特征
@@ -182,22 +182,23 @@ class HybridForexModel:
             conv_merged = MaxPooling1D(2)(conv_merged)
 
             # RNN部分
-            lstm1 = Bidirectional(LSTM(64, return_sequences=True))(conv_merged)
+            lstm1 = Bidirectional(LSTM(n_lstm_units, return_sequences=True))(conv_merged)
             lstm1 = BatchNormalization()(lstm1)
-            lstm2 = Bidirectional(LSTM(32))(lstm1)
+            lstm2 = Bidirectional(LSTM(n_lstm_units//2))(lstm1)
             lstm2 = BatchNormalization()(lstm2)
 
             # 全连接层
             dense1 = Dense(64, activation='relu')(lstm2)
-            dense1 = Dropout(0.3)(dense1)
-            output = Dense(3, activation='softmax')(dense1)  # 3个类别
+            dense1 = Dropout(dropout_rate)(dense1)
+            output = Dense(3, activation='softmax')(dense1)
 
             # 创建模型
             model = Model(inputs=seq_input, outputs=output)
 
             # 编译模型
+            optimizer = Adam(learning_rate=learning_rate)
             model.compile(
-                optimizer='adam',
+                optimizer=optimizer,
                 loss='categorical_crossentropy',
                 metrics=['accuracy']
             )
@@ -208,50 +209,34 @@ class HybridForexModel:
             self.logger.error(f"创建CNN-RNN模型失败: {str(e)}")
             return None
 
-    def _create_deep_cnn_model(self):
+    def _create_deep_cnn_model(self, n_filters=64, learning_rate=0.001, dropout_rate=0.3):
         """创建深度CNN模型"""
         try:
+            # 序列输入
             seq_input = Input(shape=(None, 1))
 
-            # 添加正则化和dropout
-            conv1 = Conv1D(64, 3, padding='same', activation='relu',
-                           kernel_regularizer=tf.keras.regularizers.l2(0.01))(seq_input)
-            conv1 = BatchNormalization()(conv1)
-            conv1 = Dropout(0.3)(conv1)
-            conv1 = MaxPooling1D(2)(conv1)
+            # CNN层
+            x = Conv1D(n_filters, 3, padding='same', activation='relu')(seq_input)
+            x = BatchNormalization()(x)
+            x = MaxPooling1D(2)(x)
 
-            conv2 = Conv1D(128, 3, padding='same', activation='relu',
-                           kernel_regularizer=tf.keras.regularizers.l2(0.01))(conv1)
-            conv2 = BatchNormalization()(conv2)
-            conv2 = Dropout(0.4)(conv2)
-            conv2 = MaxPooling1D(2)(conv2)
+            x = Conv1D(n_filters*2, 3, padding='same', activation='relu')(x)
+            x = BatchNormalization()(x)
+            x = MaxPooling1D(2)(x)
 
-            conv3 = Conv1D(256, 3, padding='same', activation='relu',
-                           kernel_regularizer=tf.keras.regularizers.l2(0.01))(conv2)
-            conv3 = BatchNormalization()(conv3)
-            conv3 = Dropout(0.5)(conv3)
+            # 全局池化
+            x = GlobalAveragePooling1D()(x)
 
-            gap = GlobalAveragePooling1D()(conv3)
+            # 全连接层
+            x = Dense(64, activation='relu')(x)
+            x = Dropout(dropout_rate)(x)
+            output = Dense(3, activation='softmax')(x)
 
-            dense1 = Dense(128, activation='relu',
-                           kernel_regularizer=tf.keras.regularizers.l2(0.01))(gap)
-            dense1 = Dropout(0.5)(dense1)
-            dense2 = Dense(64, activation='relu',
-                           kernel_regularizer=tf.keras.regularizers.l2(0.01))(dense1)
-            dense2 = Dropout(0.4)(dense2)
-            output = Dense(3, activation='softmax')(dense2)
-
+            # 创建模型
             model = Model(inputs=seq_input, outputs=output)
 
-            # 使用Adam优化器，添加学习率衰减
-            optimizer = Adam(
-                learning_rate=tf.keras.optimizers.schedules.ExponentialDecay(
-                    initial_learning_rate=0.001,
-                    decay_steps=1000,
-                    decay_rate=0.9
-                )
-            )
-
+            # 编译模型
+            optimizer = Adam(learning_rate=learning_rate)
             model.compile(
                 optimizer=optimizer,
                 loss='categorical_crossentropy',
@@ -278,72 +263,40 @@ class HybridForexModel:
             self.logger.error(f"创建SVM模型失败: {str(e)}")
             return None
 
-    def _create_transformer_model(self):
-        """创建优化后的Transformer模型"""
+    def _create_transformer_model(self, n_heads=4, ff_dim=64, learning_rate=0.001, dropout_rate=0.3):
+        """创建Transformer模型"""
         try:
             # 序列输入
             seq_input = Input(shape=(None, 1))
 
-            # 位置编码层
-            class PositionalEncoding(tf.keras.layers.Layer):
-                def __init__(self, d_model=64, **kwargs):
-                    super().__init__(**kwargs)
-                    self.d_model = d_model
+            # 自注意力层
+            x = seq_input
+            x = LayerNormalization(epsilon=1e-6)(x)
+            attn_output = MultiHeadAttention(
+                num_heads=n_heads, key_dim=ff_dim//n_heads
+            )(x, x)
+            x = Dropout(dropout_rate)(attn_output)
+            x = Add()([x, attn_output])
 
-                def call(self, inputs):
-                    seq_len = tf.shape(inputs)[1]
-
-                    # 创建位置矩阵
-                    positions = tf.range(seq_len, dtype=tf.float32)[:, tf.newaxis]
-                    angles = tf.range(self.d_model, dtype=tf.float32)[tf.newaxis, :] / self.d_model
-                    angles = positions * (1.0 / tf.pow(10000.0, angles))
-
-                    # 计算位置编码
-                    pos_encoding = tf.concat([
-                        tf.sin(angles[:, 0::2]),
-                        tf.cos(angles[:, 1::2])
-                    ], axis=-1)
-
-                    return inputs + pos_encoding[tf.newaxis, :, :]
-
-            # 应用位置编码
-            x = PositionalEncoding(d_model=64)(seq_input)
-
-            # Transformer编码器块
-            for _ in range(3):
-                # 多头自注意力
-                attention = tf.keras.layers.MultiHeadAttention(
-                    num_heads=8,
-                    key_dim=32,
-                    dropout=0.1
-                )
-                # 应用注意力机制
-                attn_output = attention(x, x)
-                x = LayerNormalization(epsilon=1e-6)(x + attn_output)
-
-                # 前馈网络
-                ffn = tf.keras.Sequential([
-                    Dense(128, activation='relu'),
-                    Dropout(0.2),
-                    Dense(64)
-                ])
-                ffn_output = ffn(x)
-                x = LayerNormalization(epsilon=1e-6)(x + ffn_output)
+            # 前馈网络
+            x = LayerNormalization(epsilon=1e-6)(x)
+            x = Dense(ff_dim, activation='relu')(x)
+            x = Dropout(dropout_rate)(x)
+            x = Dense(1)(x)
 
             # 全局池化
             x = GlobalAveragePooling1D()(x)
 
-            # 全连接层
-            x = Dense(64, activation='relu')(x)
-            x = Dropout(0.3)(x)
+            # 输出层
             output = Dense(3, activation='softmax')(x)
 
             # 创建模型
             model = Model(inputs=seq_input, outputs=output)
 
             # 编译模型
+            optimizer = Adam(learning_rate=learning_rate)
             model.compile(
-                optimizer=Adam(learning_rate=0.001),
+                optimizer=optimizer,
                 loss='categorical_crossentropy',
                 metrics=['accuracy']
             )
@@ -643,9 +596,9 @@ class HybridForexModel:
                     self.w = 0.7
                     self.c1 = 1.5
                     self.c2 = 1.5
-                    self._initialize_particles()
+                    self.initialize_particles()
 
-                def _initialize_particles(self):
+                def initialize_particles(self):
                     for _ in range(self.n_particles):
                         position = {}
                         velocity = {}
@@ -760,7 +713,10 @@ class HybridForexModel:
         creators = {
             'rf': lambda **kwargs: RandomForestClassifier(random_state=42, **kwargs),
             'svm': lambda **kwargs: SVC(kernel='rbf', probability=True, random_state=42, **kwargs),
-            'kelm': lambda **kwargs: self._create_kelm_model(**kwargs)
+            'kelm': lambda **kwargs: self._create_kelm_model(**kwargs),
+            'cnn_rnn': lambda **kwargs: self._create_cnn_rnn_model(**kwargs),
+            'deep_cnn': lambda **kwargs: self._create_deep_cnn_model(**kwargs),
+            'transformer': lambda **kwargs: self._create_transformer_model(**kwargs)
         }
         return creators.get(model_name)
 
@@ -977,6 +933,17 @@ def main():
             logging.info(f"\n训练 {name} 模型...")
 
             try:
+                # PSO优化超参数
+                best_params = model._pso_optimize(name, X_train_reshaped, y_train_cat, X_test_reshaped, y_test_cat)
+                if best_params:
+                    # 使用优化后的参数重新创建模型
+                    if name == 'cnn_rnn':
+                        dl_model = model._create_cnn_rnn_model(**best_params)
+                    elif name == 'deep_cnn':
+                        dl_model = model._create_deep_cnn_model(**best_params)
+                    else:  # transformer
+                        dl_model = model._create_transformer_model(**best_params)
+
                 # 训练模型
                 history = dl_model.fit(
                     X_train_reshaped, y_train_cat,
@@ -989,7 +956,7 @@ def main():
                 # 训练集预测
                 y_train_pred_prob = dl_model.predict(X_train_reshaped)
                 y_train_pred = np.argmax(y_train_pred_prob, axis=1) - 1
-                train_predictions.append(y_train_pred)  # 添加这行
+                train_predictions.append(y_train_pred)
                 logging.info(f"{name} 训练集准确率: {(y_train_pred == y_train).mean():.4f}")
 
                 # 测试集预测
@@ -1013,7 +980,7 @@ def main():
 
         # 集成预测
         all_predictions = np.array(all_predictions).T
-        train_predictions = np.array(train_predictions).T  # 现在这行应该可以正常工作了
+        train_predictions = np.array(train_predictions).T
 
         # 集成训练集预测
         ensemble_train_pred = np.zeros(len(y_train))
@@ -1023,15 +990,25 @@ def main():
             unique_vals, counts = np.unique(votes, return_counts=True)
             ensemble_train_pred[i] = unique_vals[np.argmax(counts)]
 
-        # 输出训练集性能
-        train_accuracy = (ensemble_train_pred == y_train).mean()
-        logging.info(f"\n集成模型训练集准确率: {train_accuracy:.4f}")
-        logging.info(f"\n集成模型测试集准确率: {ensemble_accuracy:.4f}")
-        logging.info("\n分类报告:")
-        logging.info(model._format_classification_report(y_test, all_predictions.T))
+        # 集成测试集预测
+        ensemble_pred = np.zeros(len(y_test))
+        for i in range(len(y_test)):
+            votes = all_predictions[i]
+            votes = votes.astype(int)
+            unique_vals, counts = np.unique(votes, return_counts=True)
+            ensemble_pred[i] = unique_vals[np.argmax(counts)]
 
-        # 评估集成模型
-        ensemble_accuracy = (all_predictions.T == y_test).mean()
+        # 计算性能指标
+        train_accuracy = (ensemble_train_pred == y_train).mean()
+        ensemble_accuracy = (ensemble_pred == y_test).mean()
+
+        # 输出性能
+        logging.info(f"\n集成模型训练集准确率: {train_accuracy:.4f}")
+        logging.info(f"集成模型测试集准确率: {ensemble_accuracy:.4f}")
+        logging.info("\n分类报告:")
+        logging.info(model._format_classification_report(y_test, ensemble_pred))
+
+        # 保存性能记录
         ensemble_performances[pair] = ensemble_accuracy
 
         # 计算训练集上的集成预测
