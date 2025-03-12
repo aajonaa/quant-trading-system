@@ -472,14 +472,16 @@ class HybridForexModel:
                         callbacks=[
                             tf.keras.callbacks.EarlyStopping(
                                 monitor='val_loss',
-                                patience=10,
-                                restore_best_weights=True
+                                patience=15,          # 增加耐心值
+                                restore_best_weights=True,
+                                min_delta=0.001
                             ),
                             tf.keras.callbacks.ReduceLROnPlateau(
                                 monitor='val_loss',
-                                factor=0.5,
-                                patience=5,
-                                min_lr=1e-6
+                                factor=0.2,          # 更激进的学习率衰减
+                                patience=10,         # 增加耐心值
+                                min_lr=1e-7,        # 降低最小学习率
+                                verbose=0
                             )
                         ],
                         verbose=0
@@ -967,15 +969,15 @@ def main():
         callbacks = [
             tf.keras.callbacks.EarlyStopping(
                 monitor='val_loss',
-                patience=10,
+                patience=15,          # 增加耐心值
                 restore_best_weights=True,
                 min_delta=0.001
             ),
             tf.keras.callbacks.ReduceLROnPlateau(
                 monitor='val_loss',
-                factor=0.5,
-                patience=5,
-                min_lr=1e-6,
+                factor=0.2,          # 更激进的学习率衰减
+                patience=10,         # 增加耐心值
+                min_lr=1e-7,        # 降低最小学习率
                 verbose=0
             )
         ]
@@ -995,10 +997,27 @@ def main():
 
                 # 根据模型类型使用不同的训练方法
                 if name == 'kelm':
-                    ml_model.fit(X_train_scaled, y_train, 
-                               validation_data=(X_test_scaled, y_test),
-                               early_stopping=True,
-                               patience=5)
+                    # KELM不支持validation_data参数，使用自定义的早停逻辑
+                    best_score = float('-inf')
+                    patience_count = 0
+                    max_units = best_params.get('hidden_units', 1000)
+                    step_size = 100
+                    current_units = step_size
+
+                    while patience_count < 5 and current_units <= max_units:
+                        ml_model.set_params(hidden_units=current_units)
+                        ml_model.fit(X_train_scaled, y_train)
+                        # 使用predict替代score来计算准确率
+                        test_pred = ml_model.predict(X_test_scaled)
+                        score = np.mean(test_pred == y_test)
+                        
+                        if score > best_score + 0.001:
+                            best_score = score
+                            patience_count = 0
+                        else:
+                            patience_count += 1
+                        
+                        current_units += step_size
                 elif name == 'rf':
                     # RandomForest的warm_start方式实现早停
                     ml_model.set_params(warm_start=True)
@@ -1020,23 +1039,25 @@ def main():
                         n_estimators += 50
                 elif name == 'svm':
                     # SVM的增量训练实现早停
-                    ml_model.set_params(probability=True)  # 启用概率估计
-                    best_score = float('-inf')
-                    patience_count = 0
-                    max_iter = 100
+                    ml_model.set_params(
+                        probability=True,     # 启用概率估计
+                        cache_size=2000,     # 增加缓存大小
+                        tol=1e-3,           # 调整容差
+                        max_iter=1000       # 直接设置较大的迭代次数
+                    )
                     
-                    while patience_count < 5 and max_iter <= 1000:
-                        ml_model.set_params(max_iter=max_iter)
-                        ml_model.fit(X_train_scaled, y_train)
-                        score = ml_model.score(X_test_scaled, y_test)
-                        
-                        if score > best_score + 0.001:
-                            best_score = score
-                            patience_count = 0
-                        else:
-                            patience_count += 1
-                        
-                        max_iter += 100
+                    # 对训练数据进行额外的缩放
+                    X_train_svm = np.clip(X_train_scaled, -3, 3)
+                    X_train_svm = X_train_svm / np.max(np.abs(X_train_svm), axis=0)
+                    X_test_svm = np.clip(X_test_scaled, -3, 3)
+                    X_test_svm = X_test_svm / np.max(np.abs(X_test_svm), axis=0)
+                    
+                    # 一次性训练模型
+                    ml_model.fit(X_train_svm, y_train)
+                    
+                    # 保存处理后的数据用于后续预测
+                    X_train_scaled = X_train_svm
+                    X_test_scaled = X_test_svm
                 else:
                     ml_model.fit(X_train_scaled, y_train)
 
@@ -1081,15 +1102,19 @@ def main():
                     else:  # transformer
                         dl_model = model._create_transformer_model(**best_params)
 
-                # 所有深度学习模型使用相同的回调函数
+                # 使用回调函数训练模型
                 history = dl_model.fit(
                     X_train_reshaped, y_train_cat,
-                    epochs=100,
+                    epochs=200,           # 增加最大轮数
                     batch_size=32,
                     validation_split=0.2,
                     callbacks=callbacks,
                     verbose=0
                 )
+
+                # 检查训练历史
+                if min(history.history['val_loss']) > min(history.history['loss']) * 1.5:
+                    logging.warning(f"{name} 可能存在过拟合")
 
                 # 训练集预测
                 y_train_pred_prob = dl_model.predict(X_train_reshaped)
