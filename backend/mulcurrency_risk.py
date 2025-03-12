@@ -2,17 +2,12 @@ import pandas as pd
 import numpy as np
 import logging
 from pathlib import Path
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-import json
-import plotly.io as pio
 from itertools import combinations
-import kaleido  # 添加这行以支持图片导出
 from sklearn.preprocessing import StandardScaler
 from model_analysis import HybridForexModel
 import seaborn as sns
 import matplotlib.pyplot as plt
-from datetime import datetime, timedelta
+from datetime import datetime
 
 class MultiCurrencyRiskAnalyzer:
     def __init__(self):
@@ -153,8 +148,6 @@ class MultiCurrencyRiskAnalyzer:
                 }
             
             # 生成风险报告
-            self._generate_risk_report(self.risk_signals)
-            
             self.logger.info(f"已生成 {len(self.risk_signals)} 个组合的风险信号")
             return True
             
@@ -162,136 +155,92 @@ class MultiCurrencyRiskAnalyzer:
             self.logger.error(f"生成风险信号失败: {str(e)}")
             return False
 
-    def _generate_risk_report(self, risk_signals):
-        """生成优化后的风险报告"""
-        try:
-            report_data = []
-            for comb_name, metrics in risk_signals.items():
-                report_data.append({
-                    '货币对组合': comb_name,
-                    '相关系数': metrics['correlation'],
-                    '风险信号': metrics['risk_signal'],
-                    '风险类型': metrics['risk_type'],
-                    '风险强度': metrics['risk_level']
-                })
-            
-            # 创建报告DataFrame
-            report_df = pd.DataFrame(report_data)
-            
-            # 按风险强度排序
-            report_df = report_df.sort_values('风险强度', ascending=False)
-
-            
-            # 生成Markdown格式的报告
-            md_content = [
-                "# 多货币对风险分析报告\n",
-                "## 风险信号说明",
-                "- 风险信号范围: [-1, 1]",
-                "- 正值表示同向风险，负值表示对冲风险",
-                "- 绝对值越大表示关联性越强\n",
-                "## 主要风险组合\n"
-            ]
-            
-            # 添加高风险组合
-            high_risk = report_df[report_df['风险强度'] >= 0.7]
-            if not high_risk.empty:
-                md_content.append("### 高度关联组合")
-                for _, row in high_risk.iterrows():
-                    md_content.append(
-                        f"- {row['货币对组合']}: {row['风险类型']} "
-                        f"(信号强度: {row['风险信号']:.3f})"
-                    )
-            
-            # 添加对冲组合
-            hedge_pairs = report_df[report_df['风险信号'] < -0.5]
-            if not hedge_pairs.empty:
-                md_content.append("\n### 潜在对冲组合")
-                for _, row in hedge_pairs.iterrows():
-                    md_content.append(
-                        f"- {row['货币对组合']}: 对冲效果 "
-                        f"{abs(row['风险信号'])*100:.1f}%"
-                    )
-            
-            # 保存Markdown报告
-            with open(self.output_dir / "risk_analysis.md", "w", encoding='utf-8') as f:
-                f.write("\n".join(md_content))
-            
-            self.logger.info("风险报告生成完成")
-            
-        except Exception as e:
-            self.logger.error(f"生成风险报告失败: {str(e)}")
-
-    def generate_pair_combinations(self, correlation_threshold=0.5):
-        """生成高相关性的货币对组合"""
-        try:
-            pairs = list(self.correlation_matrix.columns)
-            self.pair_combinations = []
-            
-            # 只生成两两组合
-            for pair1, pair2 in combinations(pairs, 2):
-                corr = abs(self.correlation_matrix.loc[pair1, pair2])
-                if corr >= correlation_threshold:
-                    self.pair_combinations.append((pair1, pair2, corr))
-            
-            # 按相关性排序
-            self.pair_combinations.sort(key=lambda x: x[-1], reverse=True)
-            
-            # 生成组合说明文档
-            self._generate_combination_report()
-            
-            return True
-            
-        except Exception as e:
-            self.logger.error(f"生成货币对组合失败: {str(e)}")
-            return False
-
-            
     def generate_combination_signals(self):
-        """生成组合风险信号的时间序列"""
+        """生成两两货币对的风险信号"""
         try:
-            if not self.pairs_data:
-                self.logger.error("未找到货币对数据")
+            if not self.correlation_matrix is not None:
+                self.logger.error("未找到相关性矩阵")
                 return False
             
-            # 获取共同的日期索引
-            common_dates = None
-            for df in self.pairs_data.values():
-                dates = set(df.index)
-                if common_dates is None:
-                    common_dates = dates
+            # 创建风险信号列表
+            risk_signals = []
+            pairs = list(self.correlation_matrix.columns)
+            
+            # 生成所有两两组合的风险信号
+            for pair1, pair2 in combinations(pairs, 2):
+                # 获取两个货币对的数据
+                df1 = self.pairs_data[pair1]
+                df2 = self.pairs_data[pair2]
+                
+                # 计算相关系数
+                corr = self.correlation_matrix.loc[pair1, pair2]
+                
+                # 计算组合风险指标
+                returns1 = df1['Close'].pct_change()
+                returns2 = df2['Close'].pct_change()
+                
+                # 计算组合波动率（年化）
+                combined_vol = (returns1 + returns2).std() * np.sqrt(252)
+                
+                # 计算信号一致性
+                signal_agreement = (
+                    (df1['Ensemble_Signal'] * df2['Ensemble_Signal']).mean()
+                )
+                
+                # 计算风险得分 (0-100)
+                # 使用相关系数、波动率和信号一致性的加权组合
+                risk_score = (
+                    abs(corr) * 0.4 +  # 相关性权重
+                    combined_vol * 0.3 +  # 波动率权重
+                    abs(signal_agreement) * 0.3  # 信号一致性权重
+                ) * 100
+                
+                # 确定风险等级和交易建议
+                if risk_score >= 30:
+                    risk_level = "高风险"
+                    trade_advice = "建议对冲"
+                elif risk_score >= 20:
+                    risk_level = "中风险"
+                    trade_advice = "建议减小敞口"
+                elif risk_score >= 10:
+                    risk_level = "低风险"
+                    trade_advice = "建议持有"
                 else:
-                    common_dates = common_dates.intersection(dates)
-            
-            common_dates = sorted(list(common_dates))
-            
-            # 创建组合信号DataFrame
-            combination_signals = pd.DataFrame(index=common_dates)
-            
-            # 对每个货币对组合生成时间序列信号
-            for pair1, pair2 in combinations(self.pairs_data.keys(), 2):
-                # 获取两个货币对的收益率
-                returns1 = self.pairs_data[pair1].loc[common_dates, 'Close'].pct_change()
-                returns2 = self.pairs_data[pair2].loc[common_dates, 'Close'].pct_change()
+                    risk_level = "极低风险"
+                    trade_advice = "可以增加敞口"
                 
-                # 计算动态相关系数（使用60天滚动窗口）
-                rolling_corr = returns1.rolling(window=60).corr(returns2)
-                
-                # 生成组合名称
-                combination_name = f"{pair1}_{pair2}"
-                
-                # 保存到组合信号DataFrame
-                combination_signals[combination_name] = rolling_corr
+                # 添加到风险信号列表
+                risk_signals.append({
+                    '货币对组合': f"{pair1}-{pair2}",
+                    '相关系数': round(corr, 4),
+                    '组合波动率': round(combined_vol, 4),
+                    '信号一致性': round(signal_agreement, 4),
+                    '风险得分': round(risk_score, 2),
+                    '风险等级': risk_level,
+                    '交易建议': trade_advice
+                })
             
-            self.combination_signals = combination_signals
+            # 创建DataFrame并按风险得分排序
+            risk_df = pd.DataFrame(risk_signals)
+            risk_df = risk_df.sort_values('风险得分', ascending=False)
             
-            # 保存组合信号到CSV
-            self.combination_signals.to_csv(self.output_dir / "combination_signals.csv")
-            self.logger.info(f"已生成 {len(self.combination_signals.columns)} 个组合的时间序列信号")
+            # 保存到CSV文件
+            output_file = self.output_dir / "currency_pair_risks.csv"
+            risk_df.to_csv(output_file, index=False, encoding='utf-8')
+            self.logger.info(f"已生成货币对风险信号CSV文件: {output_file}")
+            
+            # 输出风险统计
+            self.logger.info("\n=== 风险等级分布 ===")
+            level_counts = risk_df['风险等级'].value_counts()
+            for level, count in level_counts.items():
+                self.logger.info(f"{level}: {count}对")
             
             return True
             
         except Exception as e:
             self.logger.error(f"生成组合风险信号失败: {str(e)}")
+            import traceback
+            self.logger.error(traceback.format_exc())
             return False
 
     def generate_visualizations(self):
@@ -500,7 +449,7 @@ class MultiCurrencyRiskAnalyzer:
             # 提取所有货币对的收益率
             returns_dict = {}
             for pair, df in currency_data.items():
-                returns_dict[pair] = df['returns']
+                returns_dict[pair] = df['Close'].pct_change()
             
             returns_df = pd.DataFrame(returns_dict)
             
@@ -574,9 +523,9 @@ class MultiCurrencyRiskAnalyzer:
             
             # 计算每个货币对的风险指标
             for pair, df in currency_data.items():
-                risk_data.loc[pair, '波动率'] = df['returns'].std() * np.sqrt(252)
-                risk_data.loc[pair, '偏度'] = df['returns'].skew()
-                risk_data.loc[pair, '峰度'] = df['returns'].kurtosis()
+                risk_data.loc[pair, '波动率'] = df['Close'].pct_change().std() * np.sqrt(252)
+                risk_data.loc[pair, '偏度'] = df['Close'].pct_change().skew()
+                risk_data.loc[pair, '峰度'] = df['Close'].pct_change().kurtosis()
                 risk_data.loc[pair, '最大回撤'] = (df['Close'] / df['Close'].expanding().max() - 1).min()
             
             # 标准化风险指标
@@ -607,16 +556,20 @@ class MultiCurrencyRiskAnalyzer:
     def analyze_risk(self, currency_data):
         """分析多货币风险"""
         try:
-            # 1. 计算风险信号
+            # 1. 计算每个货币对的收益率
+            for pair, df in currency_data.items():
+                df['returns'] = df['Close'].pct_change()
+            
+            # 2. 计算风险信号
             risk_signals, correlations = self.calculate_risk_signals(currency_data)
             if risk_signals is None:
                 return None
             
-            # 2. 生成热力图
+            # 3. 生成热力图
             output_path = self.output_dir / f"risk_heatmap_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
             risk_data = self.plot_risk_heatmap(currency_data, risk_signals, correlations, output_path)
             
-            # 3. 生成风险报告
+            # 4. 生成风险报告
             latest_risk = risk_signals.iloc[-1]
             report = {
                 'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
@@ -627,11 +580,24 @@ class MultiCurrencyRiskAnalyzer:
                 'risk_metrics': risk_data.to_dict() if risk_data is not None else None
             }
             
+            # 5. 添加详细的风险指标
+            for pair, df in currency_data.items():
+                report[f'{pair}_metrics'] = {
+                    'volatility': df['returns'].std() * np.sqrt(252),  # 年化波动率
+                    'skewness': df['returns'].skew(),  # 偏度
+                    'kurtosis': df['returns'].kurtosis(),  # 峰度
+                    'max_drawdown': (df['Close'] / df['Close'].expanding().max() - 1).min(),  # 最大回撤
+                    'signal_strength': abs(df['Ensemble_Signal']).mean()  # 信号强度
+                }
+            
             return report
             
         except Exception as e:
             self.logger.error(f"分析风险时出错: {str(e)}")
+            import traceback
+            self.logger.error(traceback.format_exc())
             return None
+
 
 def main():
     try:
@@ -662,12 +628,6 @@ def main():
             logging.error("生成风险信号失败，程序终止")
             return
             
-        # 生成货币对组合
-        logging.info("开始生成货币对组合...")
-        if not analyzer.generate_pair_combinations(correlation_threshold=0.5):
-            logging.error("生成货币对组合失败，程序终止")
-            return
-            
         # 生成组合风险信号
         logging.info("开始生成组合风险信号...")
         if not analyzer.generate_combination_signals():
@@ -682,13 +642,26 @@ def main():
         
         # 执行风险分析
         logging.info("开始执行风险分析...")
-        results = analyzer.analyze_currency_risks(analyzer.pairs_data)
+        results = analyzer.analyze_risk(analyzer.pairs_data)
         
         # 输出风险分析总结
         if results:
             logging.info("\n=== 多货币风险分析总结 ===")
-            for pair, result in results.items():
-                logging.info(f"{pair} 风险评分: {result['metrics']['risk_score']:.2f}/100")
+            logging.info(f"当前风险等级: {results['risk_level']}")
+            logging.info(f"平均波动率: {results['avg_volatility']:.4f}")
+            logging.info(f"平均相关性: {results['avg_correlation']:.4f}")
+            logging.info(f"风险指标: {results['risk_indicator']:.4f}")
+            
+            # 输出每个货币对的详细指标
+            logging.info("\n各货币对风险指标:")
+            for pair in analyzer.pairs_data.keys():
+                metrics = results[f'{pair}_metrics']
+                logging.info(f"\n{pair}:")
+                logging.info(f"  年化波动率: {metrics['volatility']:.4f}")
+                logging.info(f"  偏度: {metrics['skewness']:.4f}")
+                logging.info(f"  峰度: {metrics['kurtosis']:.4f}")
+                logging.info(f"  最大回撤: {metrics['max_drawdown']:.4f}")
+                logging.info(f"  信号强度: {metrics['signal_strength']:.4f}")
         
         logging.info("所有分析完成")
         

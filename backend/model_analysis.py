@@ -170,33 +170,33 @@ class HybridForexModel:
         try:
             # 序列输入
             seq_input = Input(shape=(None, 1))
-            
+
             # CNN部分
-            conv1 = Conv1D(n_filters, 3, padding='same', activation='relu', 
-                          kernel_regularizer=tf.keras.regularizers.l2(0.01))(seq_input)
+            conv1 = Conv1D(n_filters, 3, padding='same', activation='relu',
+                           kernel_regularizer=tf.keras.regularizers.l2(0.01))(seq_input)
             conv1 = BatchNormalization()(conv1)
-            conv2 = Conv1D(n_filters//2, 5, padding='same', activation='relu',
-                          kernel_regularizer=tf.keras.regularizers.l2(0.01))(seq_input)
+            conv2 = Conv1D(n_filters // 2, 5, padding='same', activation='relu',
+                           kernel_regularizer=tf.keras.regularizers.l2(0.01))(seq_input)
             conv2 = BatchNormalization()(conv2)
-            
+
             # 合并CNN特征
             conv_merged = concatenate([conv1, conv2])
             conv_merged = MaxPooling1D(2)(conv_merged)
-            
+
             # RNN部分
             lstm1 = Bidirectional(LSTM(n_lstm_units, return_sequences=True,
-                                     kernel_regularizer=tf.keras.regularizers.l2(0.01)))(conv_merged)
+                                       kernel_regularizer=tf.keras.regularizers.l2(0.01)))(conv_merged)
             lstm1 = BatchNormalization()(lstm1)
-            lstm2 = Bidirectional(LSTM(n_lstm_units//2,
-                                     kernel_regularizer=tf.keras.regularizers.l2(0.01)))(lstm1)
+            lstm2 = Bidirectional(LSTM(n_lstm_units // 2,
+                                       kernel_regularizer=tf.keras.regularizers.l2(0.01)))(lstm1)
             lstm2 = BatchNormalization()(lstm2)
-            
+
             # 全连接层
             dense1 = Dense(64, activation='relu',
-                          kernel_regularizer=tf.keras.regularizers.l2(0.01))(lstm2)
+                           kernel_regularizer=tf.keras.regularizers.l2(0.01))(lstm2)
             dense1 = Dropout(dropout_rate)(dense1)
             output = Dense(3, activation='softmax')(dense1)
-            
+
             model = Model(inputs=seq_input, outputs=output)
             optimizer = Adam(learning_rate=learning_rate)
             model.compile(
@@ -204,9 +204,9 @@ class HybridForexModel:
                 loss='categorical_crossentropy',
                 metrics=['accuracy']
             )
-            
+
             return model
-            
+
         except Exception as e:
             self.logger.error(f"创建CNN-RNN模型失败: {str(e)}")
             return None
@@ -222,7 +222,7 @@ class HybridForexModel:
             x = BatchNormalization()(x)
             x = MaxPooling1D(2)(x)
 
-            x = Conv1D(n_filters*2, 3, padding='same', activation='relu')(x)
+            x = Conv1D(n_filters * 2, 3, padding='same', activation='relu')(x)
             x = BatchNormalization()(x)
             x = MaxPooling1D(2)(x)
 
@@ -263,8 +263,8 @@ class HybridForexModel:
                 probability=True,
                 random_state=42,
                 cache_size=2000,  # 增加缓存以提高性能
-                shrinking=True,   # 启用收缩启发式
-                tol=1e-4         # 提高收敛精度
+                shrinking=True,  # 启用收缩启发式
+                tol=1e-4  # 提高收敛精度
             )
         except Exception as e:
             self.logger.error(f"创建SVM模型失败: {str(e)}")
@@ -275,65 +275,65 @@ class HybridForexModel:
         try:
             # 序列输入
             seq_input = Input(shape=(None, 1))
-            
+
             # 位置编码
             x = seq_input
-            
+
             # 多层Transformer块
             for _ in range(3):  # 增加到3层
                 # 自注意力层
                 x = LayerNormalization(epsilon=1e-6)(x)
                 attn_output = MultiHeadAttention(
-                    num_heads=n_heads, 
-                    key_dim=ff_dim//n_heads,
+                    num_heads=n_heads,
+                    key_dim=ff_dim // n_heads,
                     dropout=dropout_rate
                 )(x, x)
                 x = Dropout(dropout_rate)(attn_output)
                 x = Add()([x, attn_output])
-                
+
                 # 前馈网络
                 x = LayerNormalization(epsilon=1e-6)(x)
-                ffn = Dense(ff_dim*4, activation='gelu')(x)  # 使用GELU激活
+                ffn = Dense(ff_dim * 4, activation='gelu')(x)  # 使用GELU激活
                 ffn = Dropout(dropout_rate)(ffn)
                 ffn = Dense(ff_dim)(ffn)
                 x = Add()([x, ffn])
-            
+
             # 全局池化
             x = GlobalAveragePooling1D()(x)
-            
+
             # 分类头
-            x = Dense(ff_dim*2, activation='gelu')(x)
+            x = Dense(ff_dim * 2, activation='gelu')(x)
             x = LayerNormalization(epsilon=1e-6)(x)
             x = Dropout(dropout_rate)(x)
             x = Dense(ff_dim, activation='gelu')(x)
             x = LayerNormalization(epsilon=1e-6)(x)
             output = Dense(3, activation='softmax')(x)
-            
+
             model = Model(inputs=seq_input, outputs=output)
-            
+
             # 使用带warmup的自定义学习率调度
             initial_learning_rate = learning_rate
-            
+
             class CustomSchedule(tf.keras.optimizers.schedules.LearningRateSchedule):
                 def __init__(self, initial_lr, warmup_steps=1000):
                     super().__init__()
                     self.initial_lr = initial_lr
                     self.warmup_steps = warmup_steps
-                    
+
                 def __call__(self, step):
                     arg1 = tf.math.rsqrt(step)
                     arg2 = step * (self.warmup_steps ** -1.5)
                     return self.initial_lr * tf.math.minimum(arg1, arg2)
-            
+
             optimizer = Adam(learning_rate=initial_learning_rate)  # 直接使用固定学习率
             model.compile(
                 optimizer=optimizer,
                 loss='categorical_crossentropy',
                 metrics=['accuracy']
             )
-            
+
             return model
-            
+
         except Exception as e:
             self.logger.error(f"创建Transformer模型失败: {str(e)}")
             return None
@@ -533,7 +533,8 @@ class HybridForexModel:
             # 定义要排除的列
             exclude_cols = [
                 'Open', 'High', 'Low', 'Close', 'reSignal',
-                'returns'  # 添加这两个要排除的特征
+                'returns', 'log_returns'  # 添加这两个要排除的特征
+                           'returns'  # 添加这两个要排除的特征
             ]
 
             # 获取特征列（排除价格列、标签列和收益率特征）
@@ -592,7 +593,7 @@ class HybridForexModel:
                     'min_samples_split': (5, 10)
                 },
                 'svm': {
-                    'C': (0.001, 0.1),      # 进一步减小C的范围，增强正则化
+                    'C': (0.001, 0.1),  # 进一步减小C的范围，增强正则化
                     'gamma': (0.0001, 0.01)  # 减小gamma范围，使决策边界更平滑
                 },
                 'kelm': {
@@ -665,9 +666,9 @@ class HybridForexModel:
 
                         # 更新速度
                         self.velocities[i][param] = (
-                            self.w * self.velocities[i][param] +
-                            self.c1 * r1 * (self.best_positions[i][param] - self.positions[i][param]) +
-                            self.c2 * r2 * (self.global_best_position[param] - self.positions[i][param])
+                                self.w * self.velocities[i][param] +
+                                self.c1 * r1 * (self.best_positions[i][param] - self.positions[i][param]) +
+                                self.c2 * r2 * (self.global_best_position[param] - self.positions[i][param])
                         )
 
                         # 更新位置
@@ -764,15 +765,15 @@ class HybridForexModel:
         try:
             # 创建SVM模型
             model = self._create_svm_model(**params)
-            
+
             # 使用训练集训练模型
             model.fit(X_train, y_train)
-            
+
             # 在验证集上评估
             val_score = model.score(X_val, y_val)
-            
+
             return model, val_score
-            
+
         except Exception as e:
             self.logger.error(f"SVM模型训练失败: {str(e)}")
             return None, 0.0
