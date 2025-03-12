@@ -533,7 +533,7 @@ class HybridForexModel:
             # 定义要排除的列
             exclude_cols = [
                 'Open', 'High', 'Low', 'Close', 'reSignal',
-                'returns', 'log_returns'  # 添加这两个要排除的特征
+                'returns'  # 添加这两个要排除的特征
             ]
 
             # 获取特征列（排除价格列、标签列和收益率特征）

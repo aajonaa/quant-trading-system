@@ -10,6 +10,9 @@ from itertools import combinations
 import kaleido  # 添加这行以支持图片导出
 from sklearn.preprocessing import StandardScaler
 from model_analysis import HybridForexModel
+import seaborn as sns
+import matplotlib.pyplot as plt
+from datetime import datetime, timedelta
 
 class MultiCurrencyRiskAnalyzer:
     def __init__(self):
@@ -25,6 +28,9 @@ class MultiCurrencyRiskAnalyzer:
         self.combination_signals = {}  # 存储组合风险信号
         self.model = HybridForexModel()
         self.scaler = StandardScaler()
+        # 设置中文字体
+        plt.rcParams['font.sans-serif'] = ['SimHei']
+        plt.rcParams['axes.unicode_minus'] = False
         
     def load_signals(self):
         """加载所有货币对的信号数据"""
@@ -174,9 +180,7 @@ class MultiCurrencyRiskAnalyzer:
             
             # 按风险强度排序
             report_df = report_df.sort_values('风险强度', ascending=False)
-            
-            # 保存报告
-            report_df.to_csv(self.output_dir / "risk_report.csv", index=False, encoding='utf-8')
+
             
             # 生成Markdown格式的报告
             md_content = [
@@ -240,56 +244,7 @@ class MultiCurrencyRiskAnalyzer:
         except Exception as e:
             self.logger.error(f"生成货币对组合失败: {str(e)}")
             return False
-            
-    def _generate_combination_report(self):
-        """生成组合分析报告"""
-        try:
-            report_content = [
-                "# 多货币对风险分析报告\n",
-                "## 1. 数据文件说明\n",
-                "- `risk_signals.csv`: 各货币对的风险信号时间序列数据",
-                "- `risk_report.csv`: 各货币对的风险指标统计",
-                "- `combination_signals.csv`: 高相关性货币对组合的风险信号",
-                "- `visualizations.json`: 交互式可视化数据\n",
-                "## 2. 可视化图表说明\n",
-                "- `correlation.png`: 货币对之间的相关性热力图",
-                "- `risk_signals.png`: 各货币对的风险信号时间序列图",
-                "- `risk_gauge.png`: 各货币对当前风险水平仪表盘",
-                "- `combination_signals.png`: 高相关性货币对组合的风险信号图\n",
-                "## 3. 高相关性货币对组合\n"
-            ]
-            
-            # 添加货币对组合信息
-            for pair1, pair2, corr in self.pair_combinations:
-                report_content.append(
-                    f"- {pair1} - {pair2}: 相关系数 = {corr:.4f}"
-                )
-            
-            report_content.extend([
-                "\n## 4. 风险指标说明\n",
-                "- risk_level: 平均风险水平（0-1之间，越大风险越高）",
-                "- risk_volatility: 风险波动性（风险水平的标准差）",
-                "- max_risk: 最大风险值",
-                "- risk_direction: 风险方向（正值表示上涨风险，负值表示下跌风险）\n",
-                "## 5. 组合风险信号说明\n",
-                "组合风险信号通过以下步骤生成：",
-                "1. 基于收益率计算货币对之间的相关性",
-                "2. 筛选相关系数大于阈值(0.5)的货币对组合",
-                "3. 使用相关系数作为权重计算组合风险信号",
-                "4. 信号值越大表示组合风险越高\n",
-                "## 6. 使用建议\n",
-                "1. 关注高相关性货币对的协同变动",
-                "2. 结合风险方向和水平进行交易决策",
-                "3. 注意风险波动性较大的货币对",
-                "4. 优先考虑相关性高的货币对组合"
-            ])
-            
-            # 保存报告
-            with open(self.output_dir / "analysis_report.md", "w", encoding='utf-8') as f:
-                f.write("\n".join(report_content))
-            
-        except Exception as e:
-            self.logger.error(f"生成分析报告失败: {str(e)}")
+
             
     def generate_combination_signals(self):
         """生成组合风险信号的时间序列"""
@@ -340,65 +295,93 @@ class MultiCurrencyRiskAnalyzer:
             return False
 
     def generate_visualizations(self):
-        """生成可视化数据"""
+        """生成风险可视化"""
         try:
-            # 1. 相关性热力图
-            if self.correlation_matrix is not None:
-                correlation_fig = go.Figure(data=go.Heatmap(
-                    z=self.correlation_matrix.values,
-                    x=self.correlation_matrix.columns,
-                    y=self.correlation_matrix.index,
-                    colorscale='RdBu',
-                    zmin=-1, zmax=1
-                ))
-                correlation_fig.update_layout(
-                    title='货币对相关性热力图',
-                    xaxis_title='货币对',
-                    yaxis_title='货币对',
-                    width=800,
-                    height=600
-                )
-                
-                # 保存相关性热力图
-                correlation_fig.write_image(str(self.output_dir / "correlation.png"))
-                self.logger.info("相关性热力图已保存")
-                
-                # 2. 组合信号时间序列图
-                if self.combination_signals is not None:
-                    comb_fig = go.Figure()
-                    
-                    for column in self.combination_signals.columns:
-                        comb_fig.add_trace(
-                            go.Scatter(
-                                x=self.combination_signals.index,
-                                y=self.combination_signals[column],
-                                name=column,
-                                mode='lines'
-                            )
-                        )
-                        
-                    comb_fig.update_layout(
-                        title='货币对组合风险信号（动态相关性）',
-                        xaxis_title='日期',
-                        yaxis_title='相关系数',
-                        width=1200,
-                        height=800,
-                        showlegend=True
-                    )
-                    
-                    # 保存组合信号图
-                    comb_fig.write_image(str(self.output_dir / "combination_signals.png"))
-                    self.logger.info("组合信号图已保存")
-                    
-                    return {
-                        'correlation': correlation_fig.to_json(),
-                        'combination_signals': comb_fig.to_json()
-                    }
+            # 1. 创建相关性热力图
+            plt.figure(figsize=(12, 8))
+            sns.heatmap(
+                self.correlation_matrix,
+                annot=True,
+                cmap='RdYlBu_r',
+                center=0,
+                vmin=-1,
+                vmax=1,
+                fmt='.2f'
+            )
+            plt.title('货币对相关性热力图')
+            plt.tight_layout()
             
-            return None
+            # 保存热力图
+            correlation_path = self.output_dir / "correlation_heatmap.png"
+            plt.savefig(correlation_path)
+            plt.close()
+            
+            # 2. 创建风险指标热力图
+            risk_data = pd.DataFrame(index=self.pairs_data.keys())
+            
+            # 计算风险指标
+            for pair, df in self.pairs_data.items():
+                returns = df['Close'].pct_change()
+                risk_data.loc[pair, '波动率'] = returns.std() * np.sqrt(252)  # 年化波动率
+                risk_data.loc[pair, '偏度'] = returns.skew()
+                risk_data.loc[pair, '峰度'] = returns.kurtosis()
+                risk_data.loc[pair, '最大回撤'] = (df['Close'] / df['Close'].expanding().max() - 1).min()
+                risk_data.loc[pair, '信号强度'] = abs(df['Ensemble_Signal']).mean()
+            
+            # 标准化风险指标
+            risk_data = (risk_data - risk_data.mean()) / risk_data.std()
+            
+            # 创建风险热力图
+            plt.figure(figsize=(12, 8))
+            sns.heatmap(
+                risk_data,
+                annot=True,
+                cmap='RdYlBu_r',
+                center=0,
+                fmt='.2f'
+            )
+            plt.title('货币对风险指标热力图')
+            plt.tight_layout()
+            
+            # 保存风险热力图
+            risk_path = self.output_dir / "risk_heatmap.png"
+            plt.savefig(risk_path)
+            plt.close()
+            
+            # 3. 创建风险时序图
+            plt.figure(figsize=(15, 8))
+            for pair in self.pairs_data.keys():
+                df = self.pairs_data[pair]
+                risk = df['Close'].pct_change().rolling(20).std() * np.sqrt(252)
+                plt.plot(df.index, risk, label=pair, alpha=0.7)
+            
+            plt.title('货币对风险时序变化')
+            plt.xlabel('日期')
+            plt.ylabel('年化波动率')
+            plt.legend()
+            plt.grid(True)
+            plt.tight_layout()
+            
+            # 保存风险时序图
+            timeseries_path = self.output_dir / "risk_timeseries.png"
+            plt.savefig(timeseries_path)
+            plt.close()
+            
+            self.logger.info(f"已生成可视化图表：")
+            self.logger.info(f"1. 相关性热力图: {correlation_path}")
+            self.logger.info(f"2. 风险指标热力图: {risk_path}")
+            self.logger.info(f"3. 风险时序图: {timeseries_path}")
+            
+            return {
+                'correlation_heatmap': str(correlation_path),
+                'risk_heatmap': str(risk_path),
+                'risk_timeseries': str(timeseries_path)
+            }
             
         except Exception as e:
-            self.logger.error(f"生成可视化失败: {str(e)}")
+            self.logger.error(f"生成可视化时出错: {str(e)}")
+            import traceback
+            self.logger.error(traceback.format_exc())
             return None
 
     def analyze_currency_risks(self, data_dict):
@@ -502,6 +485,153 @@ class MultiCurrencyRiskAnalyzer:
             return "高风险"
         else:
             return "极高风险"
+
+    def calculate_risk_signals(self, currency_data):
+        """
+        计算多货币风险信号
+        
+        计算逻辑：
+        1. 计算每个货币对的波动率
+        2. 计算相关性矩阵
+        3. 综合评估系统性风险
+        4. 生成风险信号
+        """
+        try:
+            # 提取所有货币对的收益率
+            returns_dict = {}
+            for pair, df in currency_data.items():
+                returns_dict[pair] = df['returns']
+            
+            returns_df = pd.DataFrame(returns_dict)
+            
+            # 计算20日滚动波动率
+            volatilities = returns_df.rolling(window=20).std() * np.sqrt(252)  # 年化
+            
+            # 计算20日滚动相关性矩阵
+            correlations = returns_df.rolling(window=20).corr()
+            
+            # 计算系统性风险指标
+            risk_signals = pd.DataFrame(index=returns_df.index)
+            
+            # 1. 平均波动率
+            risk_signals['avg_vol'] = volatilities.mean(axis=1)
+            
+            # 2. 平均相关性
+            daily_corr = []
+            for date in returns_df.index:
+                if date in correlations.index.levels[0]:
+                    corr_matrix = correlations.loc[date]
+                    # 提取上三角矩阵的相关系数（排除对角线）
+                    upper_triangle = corr_matrix.values[np.triu_indices_from(corr_matrix.values, k=1)]
+                    daily_corr.append(np.mean(upper_triangle))
+                else:
+                    daily_corr.append(np.nan)
+            
+            risk_signals['avg_corr'] = daily_corr
+            
+            # 3. 计算综合风险指标
+            risk_signals['risk_indicator'] = (
+                (risk_signals['avg_vol'] - risk_signals['avg_vol'].rolling(60).mean()) / risk_signals['avg_vol'].rolling(60).std() +
+                (risk_signals['avg_corr'] - risk_signals['avg_corr'].rolling(60).mean()) / risk_signals['avg_corr'].rolling(60).std()
+            )
+            
+            # 4. 生成风险信号
+            risk_signals['risk_level'] = pd.qcut(
+                risk_signals['risk_indicator'].fillna(method='ffill'),
+                q=3,
+                labels=['低风险', '中等风险', '高风险']
+            )
+            
+            return risk_signals, correlations
+            
+        except Exception as e:
+            self.logger.error(f"计算风险信号时出错: {str(e)}")
+            return None, None
+
+    def plot_risk_heatmap(self, currency_data, risk_signals, correlations, output_path=None):
+        """生成风险热力图"""
+        try:
+            # 创建图形
+            fig = plt.figure(figsize=(15, 10))
+            
+            # 1. 相关性热力图
+            plt.subplot(2, 1, 1)
+            latest_corr = correlations.iloc[-1]
+            latest_corr = latest_corr.unstack()
+            
+            sns.heatmap(latest_corr, 
+                       annot=True, 
+                       cmap='RdYlBu_r',
+                       center=0,
+                       vmin=-1,
+                       vmax=1,
+                       fmt='.2f')
+            plt.title('货币对相关性热力图')
+            
+            # 2. 风险指标热力图
+            plt.subplot(2, 1, 2)
+            risk_data = pd.DataFrame(index=currency_data.keys())
+            
+            # 计算每个货币对的风险指标
+            for pair, df in currency_data.items():
+                risk_data.loc[pair, '波动率'] = df['returns'].std() * np.sqrt(252)
+                risk_data.loc[pair, '偏度'] = df['returns'].skew()
+                risk_data.loc[pair, '峰度'] = df['returns'].kurtosis()
+                risk_data.loc[pair, '最大回撤'] = (df['Close'] / df['Close'].expanding().max() - 1).min()
+            
+            # 标准化风险指标
+            risk_data = (risk_data - risk_data.mean()) / risk_data.std()
+            
+            sns.heatmap(risk_data,
+                       annot=True,
+                       cmap='RdYlBu_r',
+                       center=0,
+                       fmt='.2f')
+            plt.title('货币对风险指标热力图')
+            
+            plt.tight_layout()
+            
+            # 保存图形
+            if output_path:
+                plt.savefig(output_path)
+                self.logger.info(f"热力图已保存至: {output_path}")
+            
+            plt.close()
+            
+            return risk_data
+            
+        except Exception as e:
+            self.logger.error(f"生成热力图时出错: {str(e)}")
+            return None
+
+    def analyze_risk(self, currency_data):
+        """分析多货币风险"""
+        try:
+            # 1. 计算风险信号
+            risk_signals, correlations = self.calculate_risk_signals(currency_data)
+            if risk_signals is None:
+                return None
+            
+            # 2. 生成热力图
+            output_path = self.output_dir / f"risk_heatmap_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+            risk_data = self.plot_risk_heatmap(currency_data, risk_signals, correlations, output_path)
+            
+            # 3. 生成风险报告
+            latest_risk = risk_signals.iloc[-1]
+            report = {
+                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'risk_level': latest_risk['risk_level'],
+                'avg_volatility': latest_risk['avg_vol'],
+                'avg_correlation': latest_risk['avg_corr'],
+                'risk_indicator': latest_risk['risk_indicator'],
+                'risk_metrics': risk_data.to_dict() if risk_data is not None else None
+            }
+            
+            return report
+            
+        except Exception as e:
+            self.logger.error(f"分析风险时出错: {str(e)}")
+            return None
 
 def main():
     try:
