@@ -170,41 +170,43 @@ class HybridForexModel:
         try:
             # 序列输入
             seq_input = Input(shape=(None, 1))
-
+            
             # CNN部分
-            conv1 = Conv1D(n_filters, 3, padding='same', activation='relu')(seq_input)
+            conv1 = Conv1D(n_filters, 3, padding='same', activation='relu', 
+                          kernel_regularizer=tf.keras.regularizers.l2(0.01))(seq_input)
             conv1 = BatchNormalization()(conv1)
-            conv2 = Conv1D(n_filters//2, 5, padding='same', activation='relu')(seq_input)
+            conv2 = Conv1D(n_filters//2, 5, padding='same', activation='relu',
+                          kernel_regularizer=tf.keras.regularizers.l2(0.01))(seq_input)
             conv2 = BatchNormalization()(conv2)
-
+            
             # 合并CNN特征
             conv_merged = concatenate([conv1, conv2])
             conv_merged = MaxPooling1D(2)(conv_merged)
-
+            
             # RNN部分
-            lstm1 = Bidirectional(LSTM(n_lstm_units, return_sequences=True))(conv_merged)
+            lstm1 = Bidirectional(LSTM(n_lstm_units, return_sequences=True,
+                                     kernel_regularizer=tf.keras.regularizers.l2(0.01)))(conv_merged)
             lstm1 = BatchNormalization()(lstm1)
-            lstm2 = Bidirectional(LSTM(n_lstm_units//2))(lstm1)
+            lstm2 = Bidirectional(LSTM(n_lstm_units//2,
+                                     kernel_regularizer=tf.keras.regularizers.l2(0.01)))(lstm1)
             lstm2 = BatchNormalization()(lstm2)
-
+            
             # 全连接层
-            dense1 = Dense(64, activation='relu')(lstm2)
+            dense1 = Dense(64, activation='relu',
+                          kernel_regularizer=tf.keras.regularizers.l2(0.01))(lstm2)
             dense1 = Dropout(dropout_rate)(dense1)
             output = Dense(3, activation='softmax')(dense1)
-
-            # 创建模型
+            
             model = Model(inputs=seq_input, outputs=output)
-
-            # 编译模型
             optimizer = Adam(learning_rate=learning_rate)
             model.compile(
                 optimizer=optimizer,
                 loss='categorical_crossentropy',
                 metrics=['accuracy']
             )
-
+            
             return model
-
+            
         except Exception as e:
             self.logger.error(f"创建CNN-RNN模型失败: {str(e)}")
             return None
@@ -249,15 +251,20 @@ class HybridForexModel:
             self.logger.error(f"创建深度CNN模型失败: {str(e)}")
             return None
 
-    def _create_svm_model(self):
-        """创建优化后的SVM模型"""
+    def _create_svm_model(self, C=1.0, gamma='scale'):
+        """创建SVM模型，增强正则化"""
         try:
+            # 进一步增强正则化
             return SVC(
+                C=C,  # C值会通过PSO在更小范围内优化
+                gamma=gamma,
                 kernel='rbf',
+                class_weight='balanced',
                 probability=True,
                 random_state=42,
-                class_weight='balanced',  # 处理类别不平衡
-                cache_size=1000  # 增加缓存大小提高性能
+                cache_size=2000,  # 增加缓存以提高性能
+                shrinking=True,   # 启用收缩启发式
+                tol=1e-4         # 提高收敛精度
             )
         except Exception as e:
             self.logger.error(f"创建SVM模型失败: {str(e)}")
@@ -273,20 +280,20 @@ class HybridForexModel:
             x = seq_input
             
             # 多层Transformer块
-            for _ in range(2):  # 增加到2层
+            for _ in range(3):  # 增加到3层
                 # 自注意力层
                 x = LayerNormalization(epsilon=1e-6)(x)
                 attn_output = MultiHeadAttention(
                     num_heads=n_heads, 
                     key_dim=ff_dim//n_heads,
-                    dropout=dropout_rate  # 添加注意力dropout
+                    dropout=dropout_rate
                 )(x, x)
                 x = Dropout(dropout_rate)(attn_output)
                 x = Add()([x, attn_output])
                 
                 # 前馈网络
                 x = LayerNormalization(epsilon=1e-6)(x)
-                ffn = Dense(ff_dim*4, activation='relu')(x)  # 增加中间层维度
+                ffn = Dense(ff_dim*4, activation='gelu')(x)  # 使用GELU激活
                 ffn = Dropout(dropout_rate)(ffn)
                 ffn = Dense(ff_dim)(ffn)
                 x = Add()([x, ffn])
@@ -295,13 +302,30 @@ class HybridForexModel:
             x = GlobalAveragePooling1D()(x)
             
             # 分类头
-            x = Dense(ff_dim, activation='relu')(x)
+            x = Dense(ff_dim*2, activation='gelu')(x)
+            x = LayerNormalization(epsilon=1e-6)(x)
             x = Dropout(dropout_rate)(x)
-            x = Dense(ff_dim//2, activation='relu')(x)
+            x = Dense(ff_dim, activation='gelu')(x)
+            x = LayerNormalization(epsilon=1e-6)(x)
             output = Dense(3, activation='softmax')(x)
             
             model = Model(inputs=seq_input, outputs=output)
-            optimizer = Adam(learning_rate=learning_rate)
+            
+            # 使用带warmup的自定义学习率调度
+            initial_learning_rate = learning_rate
+            
+            class CustomSchedule(tf.keras.optimizers.schedules.LearningRateSchedule):
+                def __init__(self, initial_lr, warmup_steps=1000):
+                    super().__init__()
+                    self.initial_lr = initial_lr
+                    self.warmup_steps = warmup_steps
+                    
+                def __call__(self, step):
+                    arg1 = tf.math.rsqrt(step)
+                    arg2 = step * (self.warmup_steps ** -1.5)
+                    return self.initial_lr * tf.math.minimum(arg1, arg2)
+            
+            optimizer = Adam(learning_rate=initial_learning_rate)  # 直接使用固定学习率
             model.compile(
                 optimizer=optimizer,
                 loss='categorical_crossentropy',
@@ -568,8 +592,8 @@ class HybridForexModel:
                     'min_samples_split': (5, 10)
                 },
                 'svm': {
-                    'C': (0.1, 10.0),
-                    'gamma': (0.001, 0.1)
+                    'C': (0.001, 0.1),      # 进一步减小C的范围，增强正则化
+                    'gamma': (0.0001, 0.01)  # 减小gamma范围，使决策边界更平滑
                 },
                 'kelm': {
                     'hidden_units': (500, 1500),
@@ -727,13 +751,31 @@ class HybridForexModel:
         """获取模型创建函数"""
         creators = {
             'rf': lambda **kwargs: RandomForestClassifier(random_state=42, **kwargs),
-            'svm': lambda **kwargs: SVC(kernel='rbf', probability=True, random_state=42, **kwargs),
+            'svm': lambda **kwargs: self._create_svm_model(**kwargs),
             'kelm': lambda **kwargs: self._create_kelm_model(**kwargs),
             'cnn_rnn': lambda **kwargs: self._create_cnn_rnn_model(**kwargs),
             'deep_cnn': lambda **kwargs: self._create_deep_cnn_model(**kwargs),
             'transformer': lambda **kwargs: self._create_transformer_model(**kwargs)
         }
         return creators.get(model_name)
+
+    def _train_svm_model(self, X_train, y_train, X_val, y_val, **params):
+        """使用交叉验证训练SVM模型"""
+        try:
+            # 创建SVM模型
+            model = self._create_svm_model(**params)
+            
+            # 使用训练集训练模型
+            model.fit(X_train, y_train)
+            
+            # 在验证集上评估
+            val_score = model.score(X_val, y_val)
+            
+            return model, val_score
+            
+        except Exception as e:
+            self.logger.error(f"SVM模型训练失败: {str(e)}")
+            return None, 0.0
 
 
 class SignalAnalyzer:
