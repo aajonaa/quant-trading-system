@@ -14,6 +14,8 @@ from sklearn.preprocessing import StandardScaler
 from keras.optimizers import Adam
 from keras.utils import to_categorical
 import xgboost as xgb
+from sklearn.linear_model import LogisticRegression
+from sklearn.neural_network import MLPClassifier
 
 
 class HybridForexModel:
@@ -338,35 +340,70 @@ class HybridForexModel:
             self.logger.error(f"创建Transformer模型失败: {str(e)}")
             return None
 
-    def _create_final_ensemble(self, meta_features_train, y_train):
+    def _create_final_ensemble(self, meta_features_train, y_train, meta_features_val=None, y_val=None):
         """创建最终的Stacking集成模型"""
         try:
-            # 使用XGBoost作为元学习器
+            # 定义所有元模型
+            meta_learners = {
+                'xgb': xgb.XGBClassifier(
+                    objective='multi:softmax',
+                    num_class=3,
+                    max_depth=6,
+                    learning_rate=0.01,
+                    n_estimators=500,
+                    subsample=0.8,
+                    colsample_bytree=0.8,
+                    min_child_weight=3,
+                    gamma=0.1,
+                    eval_metric='mlogloss',
+                    use_label_encoder=False,
+                    random_state=42
+                ),
+                'lr': LogisticRegression(
+                    multi_class='multinomial',  # 多项式逻辑回归
+                    solver='lbfgs',            # 适用于多分类
+                    C=1.0,
+                    class_weight='balanced',
+                    max_iter=1000,
+                    random_state=42
+                ),
+                'mlp': MLPClassifier(
+                    hidden_layer_sizes=(100, 50),
+                    activation='relu',
+                    solver='adam',
+                    learning_rate='adaptive',
+                    max_iter=1000,
+                    early_stopping=True,
+                    validation_fraction=0.2,
+                    n_iter_no_change=10,       # 早停参数
+                    random_state=42
+                )
+            }
 
-            meta_learner = xgb.XGBClassifier(
-                objective='multi:softmax',  # 多分类问题
-                num_class=3,  # 三分类（-1,0,1）
-                max_depth=6,
-                learning_rate=0.1,
-                n_estimators=100,
-                subsample=0.8,
-                colsample_bytree=0.8,
-                min_child_weight=3,
-                gamma=0.1,
-                eval_metric='mlogloss',
-                use_label_encoder=False,
-                random_state=42
-            )
+            # 训练所有元模型并记录准确率
+            model_accuracies = {}
+            trained_models = {}
+            
+            for name, model in meta_learners.items():
+                if name == 'xgb':
+                    model.fit(
+                        meta_features_train,
+                        y_train,
+                        eval_set=[(meta_features_train, y_train)],
+                        verbose=False
+                    )
+                else:
+                    model.fit(meta_features_train, y_train)
+                
+                # 计算准确率
+                train_pred = model.predict(meta_features_train)
+                accuracy = np.mean(train_pred == y_train)
+                model_accuracies[name] = accuracy
+                trained_models[name] = model
 
-            # 训练元学习器
-            meta_learner.fit(
-                meta_features_train,
-                y_train,
-                eval_set=[(meta_features_train, y_train)],
-                verbose=False
-            )
-
-            self.ensemble_model = meta_learner
+            # 选择准确率最高的模型
+            best_model_name = max(model_accuracies, key=model_accuracies.get)
+            self.ensemble_model = trained_models[best_model_name]
 
             return True
 
@@ -534,7 +571,6 @@ class HybridForexModel:
             exclude_cols = [
                 'Open', 'High', 'Low', 'Close', 'reSignal',
                 'returns', 'log_returns'  # 添加这两个要排除的特征
-                           'returns'  # 添加这两个要排除的特征
             ]
 
             # 获取特征列（排除价格列、标签列和收益率特征）
@@ -729,14 +765,14 @@ class HybridForexModel:
 
             # 创建PSO优化器
             pso = ParticleSwarmOptimizer(
-                n_particles=1,
+                n_particles=3,
                 param_bounds=param_bounds[model_name],
                 model_creator=self._get_model_creator(model_name),
                 is_dl=is_dl
             )
 
             # 运行优化
-            best_params, best_score = pso.optimize(X_train, y_train, X_val, y_val, n_iterations=1)
+            best_params, best_score = pso.optimize(X_train, y_train, X_val, y_val, n_iterations=3)
 
             self.logger.info(f"\nPSO优化结果 ({model_name}):")
             self.logger.info(f"最佳参数: {best_params}")
@@ -760,23 +796,6 @@ class HybridForexModel:
         }
         return creators.get(model_name)
 
-    def _train_svm_model(self, X_train, y_train, X_val, y_val, **params):
-        """使用交叉验证训练SVM模型"""
-        try:
-            # 创建SVM模型
-            model = self._create_svm_model(**params)
-
-            # 使用训练集训练模型
-            model.fit(X_train, y_train)
-
-            # 在验证集上评估
-            val_score = model.score(X_val, y_val)
-
-            return model, val_score
-
-        except Exception as e:
-            self.logger.error(f"SVM模型训练失败: {str(e)}")
-            return None, 0.0
 
 
 class SignalAnalyzer:
@@ -865,7 +884,7 @@ class SignalAnalyzer:
         try:
             # 计算基于固定阈值的信号准确性
             returns = df['returns']
-            threshold = 0.00075  # 0.075%
+            threshold = 0.00085  # 0.085%
 
             # 生成基于阈值的信号
             predicted_signals = np.zeros_like(returns)
@@ -944,6 +963,23 @@ def main():
         train_predictions = []  # 添加这行
         valid_models = []
 
+        # 创建早停和学习率衰减的回调函数
+        callbacks = [
+            tf.keras.callbacks.EarlyStopping(
+                monitor='val_loss',
+                patience=10,
+                restore_best_weights=True,
+                min_delta=0.001
+            ),
+            tf.keras.callbacks.ReduceLROnPlateau(
+                monitor='val_loss',
+                factor=0.5,
+                patience=5,
+                min_lr=1e-6,
+                verbose=0
+            )
+        ]
+
         # 机器学习模型训练和预测
         for name, ml_model in model.base_models['ml_models'].items():
             if ml_model is None:
@@ -957,8 +993,52 @@ def main():
                 if best_params:
                     ml_model.set_params(**best_params)
 
-                # 训练模型
-                ml_model.fit(X_train_scaled, y_train)
+                # 根据模型类型使用不同的训练方法
+                if name == 'kelm':
+                    ml_model.fit(X_train_scaled, y_train, 
+                               validation_data=(X_test_scaled, y_test),
+                               early_stopping=True,
+                               patience=5)
+                elif name == 'rf':
+                    # RandomForest的warm_start方式实现早停
+                    ml_model.set_params(warm_start=True)
+                    best_score = float('-inf')
+                    patience_count = 0
+                    n_estimators = 50  # 初始树的数量
+                    
+                    while patience_count < 5 and n_estimators <= 500:
+                        ml_model.set_params(n_estimators=n_estimators)
+                        ml_model.fit(X_train_scaled, y_train)
+                        score = ml_model.score(X_test_scaled, y_test)
+                        
+                        if score > best_score + 0.001:
+                            best_score = score
+                            patience_count = 0
+                        else:
+                            patience_count += 1
+                        
+                        n_estimators += 50
+                elif name == 'svm':
+                    # SVM的增量训练实现早停
+                    ml_model.set_params(probability=True)  # 启用概率估计
+                    best_score = float('-inf')
+                    patience_count = 0
+                    max_iter = 100
+                    
+                    while patience_count < 5 and max_iter <= 1000:
+                        ml_model.set_params(max_iter=max_iter)
+                        ml_model.fit(X_train_scaled, y_train)
+                        score = ml_model.score(X_test_scaled, y_test)
+                        
+                        if score > best_score + 0.001:
+                            best_score = score
+                            patience_count = 0
+                        else:
+                            patience_count += 1
+                        
+                        max_iter += 100
+                else:
+                    ml_model.fit(X_train_scaled, y_train)
 
                 # 训练集预测
                 y_train_pred = ml_model.predict(X_train_scaled)
@@ -994,7 +1074,6 @@ def main():
                 # PSO优化超参数
                 best_params = model._pso_optimize(name, X_train_reshaped, y_train_cat, X_test_reshaped, y_test_cat)
                 if best_params:
-                    # 使用优化后的参数重新创建模型
                     if name == 'cnn_rnn':
                         dl_model = model._create_cnn_rnn_model(**best_params)
                     elif name == 'deep_cnn':
@@ -1002,25 +1081,13 @@ def main():
                     else:  # transformer
                         dl_model = model._create_transformer_model(**best_params)
 
-                # 训练模型
+                # 所有深度学习模型使用相同的回调函数
                 history = dl_model.fit(
                     X_train_reshaped, y_train_cat,
-                    epochs=100,  # 增加训练轮数
+                    epochs=100,
                     batch_size=32,
                     validation_split=0.2,
-                    callbacks=[
-                        tf.keras.callbacks.EarlyStopping(
-                            monitor='val_loss',
-                            patience=10,
-                            restore_best_weights=True
-                        ),
-                        tf.keras.callbacks.ReduceLROnPlateau(
-                            monitor='val_loss',
-                            factor=0.5,
-                            patience=5,
-                            min_lr=1e-6
-                        )
-                    ],
+                    callbacks=callbacks,
                     verbose=0
                 )
 
