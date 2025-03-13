@@ -59,7 +59,7 @@ class HybridForexModel:
             self.base_models['dl_models'] = dl_models
 
             return True
-
+            
         except Exception as e:
             self.logger.error(f"创建基础模型失败: {str(e)}")
             return False
@@ -96,7 +96,7 @@ class HybridForexModel:
                     }
 
                 def fit(self, X, y):
-                    """训练模型"""
+        """训练模型"""
                     if X is None or y is None:
                         raise ValueError("输入数据不能为空")
 
@@ -162,11 +162,11 @@ class HybridForexModel:
                     return one_hot
 
             return KELMClassifier(hidden_units=hidden_units, gamma=gamma, C=C)
-
+            
         except Exception as e:
             self.logger.error(f"创建KELM模型失败: {str(e)}")
             return None
-
+            
     def _create_cnn_rnn_model(self, n_filters=64, n_lstm_units=64, learning_rate=0.001, dropout_rate=0.3):
         """创建CNN-RNN混合模型"""
         try:
@@ -208,11 +208,11 @@ class HybridForexModel:
             )
 
             return model
-
+            
         except Exception as e:
             self.logger.error(f"创建CNN-RNN模型失败: {str(e)}")
             return None
-
+            
     def _create_deep_cnn_model(self, n_filters=64, learning_rate=0.001, dropout_rate=0.3):
         """创建深度CNN模型"""
         try:
@@ -335,11 +335,11 @@ class HybridForexModel:
             )
 
             return model
-
+            
         except Exception as e:
             self.logger.error(f"创建Transformer模型失败: {str(e)}")
             return None
-
+            
     def _create_final_ensemble(self, meta_features_train, y_train, meta_features_val=None, y_val=None):
         """创建最终的Stacking集成模型"""
         try:
@@ -406,7 +406,7 @@ class HybridForexModel:
             self.ensemble_model = trained_models[best_model_name]
 
             return True
-
+            
         except Exception as e:
             self.logger.error(f"创建集成模型失败: {str(e)}")
             return False
@@ -502,7 +502,7 @@ class HybridForexModel:
 
             self.logger.info("多步预测训练完成")
             return True
-
+            
         except Exception as e:
             self.logger.error(f"多步预测训练失败: {str(e)}")
             return False
@@ -533,7 +533,7 @@ class HybridForexModel:
             predictions = self.ensemble_model.predict_proba(meta_features)
 
             return predictions
-
+            
         except Exception as e:
             self.logger.error(f"多步预测失败: {str(e)}")
             return None
@@ -593,7 +593,7 @@ class HybridForexModel:
             self.logger.info(f"\n使用的特征数量: {len(features.columns)}")
 
             return features, labels
-
+            
         except Exception as e:
             self.logger.error(f"准备特征失败: {str(e)}")
             return None, None
@@ -660,7 +660,7 @@ class HybridForexModel:
 
             if model_name not in param_bounds:
                 return None
-
+                
             # 判断是否为深度学习模型
             is_dl = model_name in ['cnn_rnn', 'deep_cnn', 'transformer']
 
@@ -781,11 +781,11 @@ class HybridForexModel:
             self.logger.info(f"最佳得分: {best_score:.4f}")
 
             return best_params
-
-        except Exception as e:
+                
+            except Exception as e:
             self.logger.error(f"PSO优化失败: {str(e)}")
-            return None
-
+                return None
+                
     def _get_model_creator(self, model_name):
         """获取模型创建函数"""
         creators = {
@@ -817,7 +817,7 @@ class SignalAnalyzer:
         except Exception as e:
             self.logger.error(f"加载数据失败: {str(e)}")
             return None
-
+            
     def prepare_features(self, df):
         """准备特征和标签"""
         try:
@@ -841,7 +841,7 @@ class SignalAnalyzer:
             self.logger.info(f"\n使用的特征数量: {len(features.columns)}")
 
             return features, labels
-
+            
         except Exception as e:
             self.logger.error(f"准备特征失败: {str(e)}")
             return None, None
@@ -945,9 +945,9 @@ def main():
         X, y = model.prepare_features(df)
         if X is None or y is None:
             continue
-
-        # 分割训练集和测试集
-        X_train, X_test, y_train, y_test = train_test_split(
+                
+            # 分割训练集和测试集
+            X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=0.2, shuffle=False, random_state=42
         )
 
@@ -1131,8 +1131,8 @@ def main():
                 logging.info(model._format_classification_report(y_test, y_test_pred))
 
                 valid_models.append(name)
-
-            except Exception as e:
+                
+        except Exception as e:
                 logging.error(f"{name} 模型训练失败: {str(e)}")
                 continue
 
@@ -1188,16 +1188,16 @@ def main():
                         continue
                     pred = ml_model.predict(X_train_scaled)
                     train_predictions.append(pred)
-                except Exception as e:
+        except Exception as e:
                     logging.error(f"{name} 模型训练集预测失败: {str(e)}")
                     continue
-
+            
         for name, dl_model in model.base_models['dl_models'].items():
             if dl_model is not None:
-                try:
+        try:
                     pred_prob = dl_model.predict(X_train_reshaped)
                     train_predictions.append(np.argmax(pred_prob, axis=1) - 1)
-                except Exception as e:
+        except Exception as e:
                     logging.error(f"{name} 模型训练集预测失败: {str(e)}")
                     continue
 
