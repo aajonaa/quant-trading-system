@@ -42,7 +42,7 @@ class FeatureEngineer:
             self.macro_dir.mkdir(parents=True)
             self.logger.info(f"创建宏观数据目录: {self.macro_dir}")
         
-        self.n_components = 30  # PCA保留的组件数量
+        self.n_components = 10  # PCA保留的组件数量
         
     def load_data(self, pair):
         """加载原始数据"""
@@ -446,70 +446,82 @@ class FeatureEngineer:
             return None
 
     def _add_macro_features(self, df, pair):
-        """添加宏观经济特征，只保留国家间相同指标的差异"""
+        """添加宏观经济特征"""
         try:
-            # 获取基础货币和报价货币
-            base_country = pair[:3]  # 例如 CNY
-            quote_country = pair[3:] # 例如 USD
+            # 获取基础货币和报价货币，并进行映射转换
+            currency_map = {
+                'CNY': 'CN',
+                'EUR': 'EU',
+                'GBP': 'UK',
+                'USD': 'US',
+                'JPY': 'JP'
+            }
+            
+            base_country = currency_map.get(pair[:3], pair[:3])  # 例如 CNY -> CH
+            quote_country = currency_map.get(pair[3:], pair[3:]) # 例如 USD -> US
+            
+            # 检查宏观数据目录是否存在
+            if not self.macro_dir.exists():
+                self.logger.error(f"宏观数据目录不存在: {self.macro_dir}")
+                return df
+            
+            # 定义宏观指标及其文件名映射
+            indicators = {
+                'CPI': {'file': 'CPI', 'value_col': 'CPI'},
+                'INFLATION': {'file': 'INFLATION', 'value_col': 'INFLATION'},
+                'REAL_GDP': {'file': 'REAL_GDP', 'value_col': 'REAL_GDP'},
+                'RETAIL_SALES': {'file': 'RETAIL_SALES', 'value_col': 'RETAIL_SALES'},
+                'UNEMPLOYMENT': {'file': 'UNEMPLOYMENT', 'value_col': 'UNEMPLOYMENT'},
+            }
             
             # 加载宏观数据
             macro_data = {}
-            for country in [base_country, quote_country]:
-                for indicator in ['CPI', 'INFLATION', 'REAL', 'RETAIL', 'UNEMPLOYMENT']:
-                    file_name = f"{country}_{indicator}.csv"
-                    file_path = self.macro_dir / file_name
+            for ind_name, ind_info in indicators.items():
+                try:
+                    # 加载基础货币国家数据
+                    base_file = self.macro_dir / f"{base_country}_{ind_info['file']}.csv"
+                    quote_file = self.macro_dir / f"{quote_country}_{ind_info['file']}.csv"
                     
-                    if file_path.exists():
-                        data = pd.read_csv(file_path)
-                        data['Date'] = pd.to_datetime(data['Date'])
-                        data.set_index('Date', inplace=True)
-                        macro_data[f"{country}_{indicator}"] = data['Value']
-            
-            # 计算相同指标之间的差异特征
-            indicators = ['CPI', 'INFLATION', 'REAL', 'RETAIL', 'UNEMPLOYMENT']
-            
-            # 创建一个字典来存储所有新特征
-            new_features = {}
-            
-            for indicator in indicators:
-                base_ind = f"{base_country}_{indicator}"
-                quote_ind = f"{quote_country}_{indicator}"
-                
-                if base_ind in macro_data and quote_ind in macro_data:
-                    try:
-                        # 计算差异特征
-                        feature_name = f'MACRO_DIFF_{indicator}'
-                        new_features[feature_name] = macro_data[base_ind] - macro_data[quote_ind]
-                        new_features[f'{feature_name}_RATIO'] = macro_data[base_ind] / macro_data[quote_ind]
-                        new_features[f'{feature_name}_SPREAD'] = (macro_data[base_ind] - macro_data[quote_ind]) / macro_data[quote_ind]
-                        
-                    except Exception as e:
-                        self.logger.error(f"计算{indicator}差异特征失败: {str(e)}")
+                    if not base_file.exists() or not quote_file.exists():
+                        self.logger.warning(f"找不到宏观数据文件: {base_file} 或 {quote_file}")
                         continue
-            
-            # 一次性添加所有新特征到DataFrame
-            df = pd.concat([df, pd.DataFrame(new_features)], axis=1)
-            
-            # 处理可能的极端值和无穷值
-            for col in new_features.keys():
-                if col in df.columns:
-                    # 处理无穷值
-                    df[col] = df[col].replace([np.inf, -np.inf], 0)
-                    # 使用前向填充处理缺失值
-                    df[col] = df[col].fillna(method='ffill')
-                    # 使用后向填充处理剩余的缺失值
-                    df[col] = df[col].fillna(method='bfill')
-                    # 如果仍有缺失值，用0填充
-                    df[col] = df[col].fillna(0)
+                        
+                    # 读取数据
+                    base_data = pd.read_csv(base_file)
+                    quote_data = pd.read_csv(quote_file)
                     
-                    # 限制极端值范围
-                    if df[col].std() != 0:  # 只处理非常数列
-                        q1 = df[col].quantile(0.01)
-                        q3 = df[col].quantile(0.99)
-                        df[col] = df[col].clip(lower=q1, upper=q3)
+                    # 确保日期列存在
+                    date_col = next((col for col in base_data.columns if col.lower() == 'date'), None)
+                    if not date_col:
+                        self.logger.error(f"数据文件缺少date列: {base_file}")
+                        continue
+                        
+                    # 转换日期格式
+                    base_data[date_col] = pd.to_datetime(base_data[date_col])
+                    quote_data[date_col] = pd.to_datetime(quote_data[date_col])
+                    
+                    # 设置索引
+                    base_data.set_index(date_col, inplace=True)
+                    quote_data.set_index(date_col, inplace=True)
+                    
+                    # 对齐数据
+                    aligned_base = base_data.reindex(df.index).ffill()
+                    aligned_quote = quote_data.reindex(df.index).ffill()
+                    
+                    # 计算差异指标
+                    df[f"{ind_name}_DIFF"] = aligned_base[ind_info['value_col']] - aligned_quote[ind_info['value_col']]
+                    df[f"{ind_name}_RATIO"] = aligned_base[ind_info['value_col']] / aligned_quote[ind_info['value_col']]
+                    df[f"{ind_name}_SPREAD"] = aligned_base[ind_info['value_col']] - aligned_quote[ind_info['value_col']]
+                    
+                except Exception as e:
+                    self.logger.error(f"处理{ind_name}指标失败: {str(e)}")
+                    continue
+                
+            # 处理缺失值
+            macro_cols = [col for col in df.columns if any(ind in col for ind in indicators.keys())]
+            for col in macro_cols:
+                df[col] = df[col].ffill().bfill().fillna(0)
             
-            # 输出添加的特征信息
-            macro_cols = [col for col in df.columns if 'MACRO_DIFF' in col]
             self.logger.info(f"成功添加 {len(macro_cols)} 个宏观经济差异特征")
             self.logger.info(f"新增特征: {macro_cols}")
             
