@@ -61,6 +61,9 @@ class FeatureEngineer:
     def create_features(self, df):
         """创建特征"""
         try:
+            # 获取货币对名称
+            pair = df.name if hasattr(df, 'name') else 'Unknown'
+            
             # 1. 创建基础特征
             df['returns'] = df['Close'].pct_change()
             df['volatility'] = df['returns'].rolling(window=20).std()
@@ -124,6 +127,11 @@ class FeatureEngineer:
                 if col != 'reSignal':  # 排除信号列
                     df[col] = df[col].ffill().bfill()
             
+            # 添加宏观经济特征
+            df = self._add_macro_features(df, pair)
+            if df is None:
+                return None
+                
             return df
             
         except Exception as e:
@@ -290,6 +298,80 @@ class FeatureEngineer:
             
         except Exception as e:
             self.logger.error(f"添加ICEEMDAN分解特征失败: {str(e)}")
+            return None
+
+    def _add_macro_features(self, df, pair):
+        """添加宏观经济特征"""
+        try:
+            # 获取货币对对应的国家代码
+            base_currency = pair[:3]  # 基础货币(CNY)
+            quote_currency = pair[3:] # 报价货币(EUR/USD等)
+            
+            # 定义国家代码映射
+            country_map = {
+                'CNY': 'CN',
+                'USD': 'US', 
+                'EUR': 'EU',
+                'GBP': 'UK',
+                'JPY': 'JP',
+                'AUD': 'AU'
+            }
+            
+            base_country = country_map[base_currency]
+            quote_country = country_map[quote_currency]
+            
+            # 读取相关宏观数据
+            macro_indicators = ['CPI', 'INFLATION', 'REAL_GDP', 'RETAIL_SALES', 'UNEMPLOYMENT']
+            macro_data = {}
+            
+            for country in [base_country, quote_country]:
+                macro_data[country] = {}
+                for indicator in macro_indicators:
+                    file_path = self.data_dir.parent / 'macro_data' / f'{country}_{indicator}.csv'
+                    if file_path.exists():
+                        data = pd.read_csv(file_path)
+                        data['date'] = pd.to_datetime(data['date'])
+                        data.set_index('date', inplace=True)
+                        # 将月度/季度数据重采样为日度数据
+                        data = data.resample('D').ffill()
+                        macro_data[country][indicator] = data
+
+            # 将宏观数据与原始数据对齐
+            for country in [base_country, quote_country]:
+                for indicator in macro_indicators:
+                    if indicator in macro_data[country]:
+                        # 添加特征并处理命名
+                        col_name = f'{country}_{indicator}'
+                        df[col_name] = macro_data[country][indicator].reindex(df.index)
+                        
+                        # 计算变化率
+                        df[f'{col_name}_CHANGE'] = df[col_name].pct_change()
+                        
+                        # 计算相对值(两国差值)
+                        if indicator in macro_data[quote_country]:
+                            diff_name = f'{indicator}_DIFF'
+                            df[diff_name] = (df[f'{base_country}_{indicator}'] - 
+                                           df[f'{quote_country}_{indicator}'])
+            
+            # 添加宏观指标的移动平均和波动率
+            for col in df.columns:
+                if any(indicator in col for indicator in macro_indicators):
+                    # 计算移动平均
+                    df[f'{col}_MA7'] = df[col].rolling(window=7).mean()
+                    df[f'{col}_MA30'] = df[col].rolling(window=30).mean()
+                    
+                    # 计算波动率
+                    df[f'{col}_VOL'] = df[col].rolling(window=30).std()
+            
+            # 处理缺失值
+            df.fillna(method='ffill', inplace=True)
+            df.fillna(method='bfill', inplace=True)
+            
+            self.logger.info(f"成功添加宏观经济特征: {pair}")
+            return df
+            
+        except Exception as e:
+            self.logger.error(f"添加宏观经济特征失败: {str(e)}")
             return None
 
     def process_all_pairs(self):
