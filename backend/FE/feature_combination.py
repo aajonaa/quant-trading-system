@@ -6,6 +6,7 @@ from PyEMD import CEEMDAN
 import os
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
+from sklearn.linear_model import LinearRegression
 
 class FeatureEngineer:
     def __init__(self):
@@ -321,39 +322,88 @@ class FeatureEngineer:
             self.logger.error(f"添加ICEEMDAN分解特征失败: {str(e)}")
             return None
 
+    def _interpolate_macro_data(self, data):
+        """使用线性回归方法将低频数据转换为日度数据"""
+        try:
+            # 创建完整的日期范围
+            date_range = pd.date_range(start=data.index.min(), end=data.index.max(), freq='D')
+            
+            # 获取数值列名
+            value_col = data.select_dtypes(include=['float64', 'int64']).columns[0]
+            
+            # 创建包含所有日期的DataFrame
+            daily_data = pd.DataFrame(index=date_range)
+            daily_data['time_idx'] = (daily_data.index - daily_data.index[0]).days
+            daily_data[value_col] = np.nan
+            
+            # 将原始数据合并到日度数据中
+            daily_data.loc[data.index, value_col] = data[value_col]
+            
+            # 对每个非空区间进行线性回归
+            filled_data = pd.Series(index=daily_data.index)
+            non_null_dates = daily_data[daily_data[value_col].notna()].index
+            
+            if len(non_null_dates) >= 2:
+                # 将日期转换为时间戳以进行回归
+                X = daily_data.loc[non_null_dates, 'time_idx'].values.reshape(-1, 1)
+                y = daily_data.loc[non_null_dates, value_col].values
+                
+                # 训练回归模型
+                reg = LinearRegression()
+                reg.fit(X, y)
+                
+                # 对所有日期进行预测
+                X_all = daily_data['time_idx'].values.reshape(-1, 1)
+                filled_values = reg.predict(X_all)
+                
+                # 创建填充后的序列
+                filled_data = pd.Series(filled_values, index=daily_data.index)
+                
+                # 保持原始数据点不变
+                filled_data[non_null_dates] = daily_data.loc[non_null_dates, value_col]
+                
+                return filled_data
+            
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"宏观数据插值失败: {str(e)}")
+            return None
+
     def _add_macro_features(self, df, pair):
         """添加宏观经济特征"""
         try:
-            # 获取货币对对应的国家代码
-            base_currency = pair[:3]
-            quote_currency = pair[3:]
+            # 获取基础货币和报价货币的国家代码
+            base_currency = pair[:3]  # CNY
+            quote_currency = pair[3:] # EUR, USD等
             
+            # 国家代码映射
             country_map = {
                 'CNY': 'CN',
-                'USD': 'US', 
+                'USD': 'US',
                 'EUR': 'EU',
                 'GBP': 'UK',  # 注意英国使用UK
                 'JPY': 'JP',
             }
             
-            if base_currency not in country_map or quote_currency not in country_map:
+            base_country = country_map.get(base_currency)
+            quote_country = country_map.get(quote_currency)
+            
+            if not base_country or not quote_country:
                 self.logger.warning(f"货币对 {pair} 包含未知的货币代码")
                 return df
             
-            base_country = country_map[base_currency]
-            quote_country = country_map[quote_currency]
-            
-            # 定义宏观指标
+            # 宏观经济指标
             indicators = {
-                'CPI': 'CPI指数',
-                'INFLATION': '通货膨胀率',
-                'REAL_GDP': '实际GDP',
-                'RETAIL_SALES': '零售销售额',
-                'UNEMPLOYMENT': '失业率'
+                'CPI': '消费者价格指数',
+                'REAL_GDP': '实际国内生产总值',
+                'INFLATION':'通货膨胀率',
+                'REAL_SALES':'实际销售额',
+                'UNEMPLOYMENT':'失业率'
+                # 可以添加更多指标
             }
             
-            # 设置起始时间
-            start_date = pd.Timestamp('2015-01-01')
+            start_date = df.index.min()
             
             # 处理每个国家的每个指标
             for country in [base_country, quote_country]:
@@ -368,11 +418,12 @@ class FeatureEngineer:
                         # 读取并处理数据
                         data = pd.read_csv(file_path)
                         data['date'] = pd.to_datetime(data['date'])
-                        data = data[data['date'] >= start_date]
                         data.set_index('date', inplace=True)
                         
-                        # 将数据重采样为日频数据
-                        daily_data = data.resample('D').ffill()
+                        # 使用回归方法生成日度数据
+                        daily_data = self._interpolate_macro_data(data)
+                        if daily_data is None:
+                            continue
                         
                         # 对齐数据到交易日
                         aligned_data = daily_data.reindex(df.index)
@@ -381,14 +432,10 @@ class FeatureEngineer:
                         col_name = f'{country}_{indicator}'
                         df[col_name] = aligned_data
                         
-                        # 添加变化率
+                        # 添加变化率（使用日度数据计算）
                         df[f'{col_name}_CHANGE'] = df[col_name].pct_change()
-                        
-                        # 添加移动平均
-                        df[f'{col_name}_MA7'] = df[col_name].rolling(7).mean()
-                        df[f'{col_name}_MA30'] = df[col_name].rolling(30).mean()
-                        
-                        # 添加波动率
+
+                        # 添加波动率（基于日度数据）
                         df[f'{col_name}_VOL'] = df[col_name].rolling(30).std()
                         
                     except Exception as e:
@@ -402,9 +449,14 @@ class FeatureEngineer:
                 if base_col in df.columns and quote_col in df.columns:
                     df[f'{indicator}_DIFF'] = df[base_col] - df[quote_col]
                     df[f'{indicator}_RATIO'] = df[base_col] / df[quote_col]
+                    df[f'{indicator}_SPREAD'] = (df[base_col] - df[quote_col]) / df[quote_col]
             
-            # 填充缺失值
-            df = df.ffill().bfill()
+            # 处理可能的极端值
+            numeric_cols = df.select_dtypes(include=[np.float64, np.int64]).columns
+            for col in numeric_cols:
+                if col != 'reSignal':
+                    df[col] = df[col].clip(lower=df[col].quantile(0.01), 
+                                         upper=df[col].quantile(0.99))
             
             # 输出添加的特征信息
             macro_cols = [col for col in df.columns if any(c in col for c in [base_country, quote_country])]
@@ -465,44 +517,52 @@ class FeatureEngineer:
             for pair in pairs:
                 self.logger.info(f"处理 {pair}...")
                 
-                # 加载数据
-                df = self.load_data(pair)
-                if df is None:
+                try:
+                    # 加载数据
+                    df = self.load_data(pair)
+                    if df is None:
+                        continue
+                    
+                    # 设置货币对属性，但保持索引名称为'Date'
+                    df.currency_pair = pair
+                    
+                    # 记录原始数据信息
+                    self.logger.info(f"原始数据统计:")
+                    self.logger.info(f"价格范围: {df['Close'].min():.4f} - {df['Close'].max():.4f}")
+                    
+                    # 创建特征
+                    df_processed = self.create_features(df)
+                    if df_processed is None:
+                        continue
+                    
+                    # 数据质量检查
+                    self.check_data_quality(df_processed, pair)
+                    
+                    # 保存原始处理后的数据
+                    output_path = self.output_dir / f"{pair}_processed.csv"
+                    df_processed.to_csv(output_path, mode='w')  # 使用mode='w'覆盖现有文件
+                    self.logger.info(f"已保存处理后的数据到: {output_path}")
+                    
+                    # 应用PCA并保存
+                    self.logger.info("开始PCA降维...")
+                    df_pca = self.apply_pca(df_processed)
+                    if df_pca is not None:
+                        pca_path = self.output_dir / f"{pair}_PCA.csv"
+                        df_pca.to_csv(pca_path, mode='w')  # 使用mode='w'覆盖现有文件
+                        self.logger.info(f"已保存PCA处理后的数据到: {pca_path}")
+                        self.logger.info(f"PCA特征数量: {len(df_pca.columns)}")
+                    
+                    # 记录特征信息
+                    self.logger.info(f"原始特征数量: {len(df_processed.columns)}")
+                    self.logger.info(f"数据长度: {len(df_processed)}")
+                    
+                except PermissionError:
+                    self.logger.error(f"无法写入文件，请确保文件未被其他程序占用: {pair}")
                     continue
-                
-                # 设置货币对属性，但保持索引名称为'Date'
-                df.currency_pair = pair
-                
-                # 记录原始数据信息
-                self.logger.info(f"原始数据统计:")
-                self.logger.info(f"价格范围: {df['Close'].min():.4f} - {df['Close'].max():.4f}")
-                
-                # 创建特征
-                df_processed = self.create_features(df)
-                if df_processed is None:
+                except Exception as e:
+                    self.logger.error(f"处理{pair}时发生错误: {str(e)}")
                     continue
-                
-                # 数据质量检查
-                self.check_data_quality(df_processed, pair)
-                
-                # 保存原始处理后的数据
-                output_path = self.output_dir / f"{pair}_processed.csv"
-                df_processed.to_csv(output_path)
-                self.logger.info(f"已保存处理后的数据到: {output_path}")
-                
-                # 应用PCA并保存
-                self.logger.info("开始PCA降维...")
-                df_pca = self.apply_pca(df_processed)
-                if df_pca is not None:
-                    pca_path = self.output_dir / f"{pair}_PCA.csv"
-                    df_pca.to_csv(pca_path)
-                    self.logger.info(f"已保存PCA处理后的数据到: {pca_path}")
-                    self.logger.info(f"PCA特征数量: {len(df_pca.columns)}")
-                
-                # 记录特征信息
-                self.logger.info(f"原始特征数量: {len(df_processed.columns)}")
-                self.logger.info(f"数据长度: {len(df_processed)}")
-                
+            
             return True
             
         except Exception as e:
