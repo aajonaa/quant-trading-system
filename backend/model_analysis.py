@@ -889,8 +889,8 @@ class SignalAnalyzer:
 
             # 生成基于阈值的信号
             predicted_signals = np.zeros_like(returns)
-            predicted_signals[returns > threshold] = 1
-            predicted_signals[returns < -threshold] = -1
+            predicted_signals[returns.shift(-1) > threshold] = 1
+            predicted_signals[returns.shift(-1) < -threshold] = -1
 
             # 获取真实信号
             true_signals = df['reSignal']
@@ -932,7 +932,7 @@ def main():
     # 记录所有货币对的集成模型性能
     ensemble_performances = {}
 
-    for pair in ["CNYAUD", "CNYEUR", "CNYGBP", "CNYJPY", "CNYUSD"]:
+    for pair in [ "CNYEUR", "CNYGBP", "CNYJPY", "CNYUSD"]:
         logging.info(f"\n分析 {pair}...")
 
         # 加载数据

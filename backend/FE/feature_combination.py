@@ -4,6 +4,8 @@ from pathlib import Path
 import logging
 from PyEMD import CEEMDAN
 import os
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
 
 class FeatureEngineer:
     def __init__(self):
@@ -38,6 +40,8 @@ class FeatureEngineer:
         if not self.macro_dir.exists():
             self.macro_dir.mkdir(parents=True)
             self.logger.info(f"创建宏观数据目录: {self.macro_dir}")
+        
+        self.n_components = 20  # PCA保留的组件数量
         
     def load_data(self, pair):
         """加载原始数据"""
@@ -413,6 +417,46 @@ class FeatureEngineer:
             self.logger.error(f"添加宏观经济特征失败: {str(e)}")
             return df
 
+    def apply_pca(self, df):
+        """应用PCA降维"""
+        try:
+            # 选择数值型特征列，排除reSignal列
+            numeric_cols = df.select_dtypes(include=['float64', 'int64']).columns
+            numeric_cols = numeric_cols[numeric_cols != 'reSignal']
+            features = df[numeric_cols]
+            
+            # 标准化
+            scaler = StandardScaler()
+            scaled_features = scaler.fit_transform(features)
+            
+            # 应用PCA
+            pca = PCA(n_components=self.n_components)
+            pca_features = pca.fit_transform(scaled_features)
+            
+            # 创建PCA特征的DataFrame
+            pca_df = pd.DataFrame(
+                pca_features,
+                columns=[f'PCA_{i+1}' for i in range(self.n_components)],
+                index=df.index
+            )
+            
+            # 添加reSignal列
+            pca_df['reSignal'] = df['reSignal']
+            
+            # 计算解释方差比
+            explained_variance_ratio = pca.explained_variance_ratio_
+            cumulative_variance_ratio = np.cumsum(explained_variance_ratio)
+            
+            self.logger.info("PCA解释方差比:")
+            for i, (var_ratio, cum_ratio) in enumerate(zip(explained_variance_ratio, cumulative_variance_ratio)):
+                self.logger.info(f"PC{i+1}: {var_ratio:.4f} (累计: {cum_ratio:.4f})")
+            
+            return pca_df
+            
+        except Exception as e:
+            self.logger.error(f"PCA降维失败: {str(e)}")
+            return None
+
     def process_all_pairs(self):
         """处理所有货币对"""
         try:
@@ -441,13 +485,22 @@ class FeatureEngineer:
                 # 数据质量检查
                 self.check_data_quality(df_processed, pair)
                 
-                # 保存处理后的数据
+                # 保存原始处理后的数据
                 output_path = self.output_dir / f"{pair}_processed.csv"
                 df_processed.to_csv(output_path)
                 self.logger.info(f"已保存处理后的数据到: {output_path}")
                 
+                # 应用PCA并保存
+                self.logger.info("开始PCA降维...")
+                df_pca = self.apply_pca(df_processed)
+                if df_pca is not None:
+                    pca_path = self.output_dir / f"{pair}_PCA.csv"
+                    df_pca.to_csv(pca_path)
+                    self.logger.info(f"已保存PCA处理后的数据到: {pca_path}")
+                    self.logger.info(f"PCA特征数量: {len(df_pca.columns)}")
+                
                 # 记录特征信息
-                self.logger.info(f"特征数量: {len(df_processed.columns)}")
+                self.logger.info(f"原始特征数量: {len(df_processed.columns)}")
                 self.logger.info(f"数据长度: {len(df_processed)}")
                 
             return True
