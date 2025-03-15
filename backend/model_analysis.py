@@ -411,7 +411,7 @@ class HybridForexModel:
             self.logger.error(f"创建集成模型失败: {str(e)}")
             return False
 
-    def train_multi_step(self, X_seq, X_static, y, time_steps=[1, 3, 5, 10]):
+    def train_multi_step(self, X_seq, X_static, y, time_steps=[1, 3, 5, 10, 30]):
         """多步预测训练"""
         try:
             self.logger.info("开始多步预测训练...")
@@ -541,7 +541,7 @@ class HybridForexModel:
     def load_data(self, pair):
         """加载原始数据"""
         try:
-            file_path = self.data_dir / f"{pair}_processed.csv"
+            file_path = self.data_dir / f"{pair}_PCA.csv"
             self.logger.info(f"加载数据: {file_path}")
 
             # 检查文件是否存在

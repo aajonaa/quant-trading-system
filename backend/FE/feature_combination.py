@@ -42,7 +42,7 @@ class FeatureEngineer:
             self.macro_dir.mkdir(parents=True)
             self.logger.info(f"创建宏观数据目录: {self.macro_dir}")
         
-        self.n_components = 20  # PCA保留的组件数量
+        self.n_components = 30  # PCA保留的组件数量
         
     def load_data(self, pair):
         """加载原始数据"""
@@ -197,7 +197,7 @@ class FeatureEngineer:
             # 优化特征选择
             def select_features(df):
                 # 定义必须保留的特征
-                essential_features = ['Open', 'High', 'Low', 'Close', 'reSignal']
+                essential_features = ['Close', 'reSignal']
                 
                 # 计算相关性矩阵
                 corr_matrix = df.corr().abs()
@@ -446,125 +446,71 @@ class FeatureEngineer:
             return None
 
     def _add_macro_features(self, df, pair):
-        """添加宏观经济特征"""
+        """添加宏观经济特征，只保留国家间相同指标的差异"""
         try:
-            # 获取基础货币和报价货币的国家代码
-            base_currency = pair[:3]  # CNY
-            quote_currency = pair[3:] # EUR, USD等
+            # 获取基础货币和报价货币
+            base_country = pair[:3]  # 例如 CNY
+            quote_country = pair[3:] # 例如 USD
             
-            # 国家代码映射
-            country_map = {
-                'CNY': 'CN',
-                'USD': 'US',
-                'EUR': 'EU',
-                'GBP': 'UK',  # 注意英国使用UK
-                'JPY': 'JP',
-            }
-            
-            base_country = country_map.get(base_currency)
-            quote_country = country_map.get(quote_currency)
-            
-            if not base_country or not quote_country:
-                self.logger.warning(f"货币对 {pair} 包含未知的货币代码")
-                return df
-            
-            # 存储每个国家的宏观数据
+            # 加载宏观数据
             macro_data = {}
-            
-            # 读取并处理所有宏观数据
             for country in [base_country, quote_country]:
-                # 读取该国所有可用的宏观数据文件
-                macro_dir = self.data_dir.parent / "macro_data"
-                country_files = list(macro_dir.glob(f"{country}_*.csv"))
-                
-                for file_path in country_files:
-                    try:
-                        # 从文件名获取指标名称
-                        indicator = file_path.stem.split('_')[1]
-                        
-                        # 读取并处理数据
+                for indicator in ['CPI', 'INFLATION', 'REAL', 'RETAIL', 'UNEMPLOYMENT']:
+                    file_name = f"{country}_{indicator}.csv"
+                    file_path = self.macro_dir / file_name
+                    
+                    if file_path.exists():
                         data = pd.read_csv(file_path)
-                        data['date'] = pd.to_datetime(data['date'])
-                        data.set_index('date', inplace=True)
-                        
-                        # 使用回归方法生成日度数据
-                        daily_data = self._interpolate_macro_data(data)
-                        if daily_data is None:
-                            continue
-                        
-                        # 对齐数据到交易日
-                        aligned_data = daily_data.reindex(df.index)
-                        
-                        # 存储数据
-                        macro_data[f'{country}_{indicator}'] = aligned_data
-                        
-                        # 添加基础特征
-                        df[f'{country}_{indicator}'] = aligned_data
-                        
-                        # 添加变化率
-                        df[f'{country}_{indicator}_CHANGE'] = df[f'{country}_{indicator}'].pct_change()
-
-                        # 添加波动率
-                        df[f'{country}_{indicator}_VOL'] = df[f'{country}_{indicator}'].rolling(30).std()
-                        
-                    except Exception as e:
-                        self.logger.error(f"处理{country}_{indicator}数据失败: {str(e)}")
-                        continue
+                        data['Date'] = pd.to_datetime(data['Date'])
+                        data.set_index('Date', inplace=True)
+                        macro_data[f"{country}_{indicator}"] = data['Value']
             
-            # 计算所有可能的宏观指标组合的差异特征
-            base_indicators = [k for k in macro_data.keys() if k.startswith(base_country)]
-            quote_indicators = [k for k in macro_data.keys() if k.startswith(quote_country)]
+            # 计算相同指标之间的差异特征
+            indicators = ['CPI', 'INFLATION', 'REAL', 'RETAIL', 'UNEMPLOYMENT']
             
             # 创建一个字典来存储所有新特征
             new_features = {}
-
-            for base_ind in base_indicators:
-                for quote_ind in quote_indicators:
+            
+            for indicator in indicators:
+                base_ind = f"{base_country}_{indicator}"
+                quote_ind = f"{quote_country}_{indicator}"
+                
+                if base_ind in macro_data and quote_ind in macro_data:
                     try:
-                        # 提取指标名称
-                        base_name = base_ind.split('_')[1]
-                        quote_name = quote_ind.split('_')[1]
-                        
-                        # 跳过相同指标的比较
-                        if base_name == quote_name:
-                            continue
-                            
-                        feature_name = f'MACRO_DIFF_{base_name}_{quote_name}'
-                        
                         # 计算差异特征
+                        feature_name = f'MACRO_DIFF_{indicator}'
                         new_features[feature_name] = macro_data[base_ind] - macro_data[quote_ind]
                         new_features[f'{feature_name}_RATIO'] = macro_data[base_ind] / macro_data[quote_ind]
                         new_features[f'{feature_name}_SPREAD'] = (macro_data[base_ind] - macro_data[quote_ind]) / macro_data[quote_ind]
                         
                     except Exception as e:
-                        self.logger.error(f"计算宏观差异特征失败: {str(e)}")
+                        self.logger.error(f"计算{indicator}差异特征失败: {str(e)}")
                         continue
-
+            
             # 一次性添加所有新特征到DataFrame
             df = pd.concat([df, pd.DataFrame(new_features)], axis=1)
-
+            
             # 处理可能的极端值和无穷值
-            for col in df.columns:
-                if col != 'reSignal':
+            for col in new_features.keys():
+                if col in df.columns:
                     # 处理无穷值
-                    df[col] = df[col].replace([np.inf, -np.inf], np.nan)
-                    # 使用中位数填充缺失值
-                    df[col] = df[col].fillna(df[col].median())
-                    # 限制极端值
-                    df[col] = df[col].clip(lower=df[col].quantile(0.01), 
-                                          upper=df[col].quantile(0.99))
-
-            # 修复性能警告
-            df = df.copy()  # 创建DataFrame的副本以解决内存碎片问题
-
-            # 修复pct_change警告
-            for col in df.columns:
-                if '_CHANGE' in col:
-                    df[col] = df[col].pct_change(fill_method=None)
+                    df[col] = df[col].replace([np.inf, -np.inf], 0)
+                    # 使用前向填充处理缺失值
+                    df[col] = df[col].fillna(method='ffill')
+                    # 使用后向填充处理剩余的缺失值
+                    df[col] = df[col].fillna(method='bfill')
+                    # 如果仍有缺失值，用0填充
+                    df[col] = df[col].fillna(0)
+                    
+                    # 限制极端值范围
+                    if df[col].std() != 0:  # 只处理非常数列
+                        q1 = df[col].quantile(0.01)
+                        q3 = df[col].quantile(0.99)
+                        df[col] = df[col].clip(lower=q1, upper=q3)
             
             # 输出添加的特征信息
-            macro_cols = [col for col in df.columns if 'MACRO' in col or any(c in col for c in [base_country, quote_country])]
-            self.logger.info(f"成功添加 {len(macro_cols)} 个宏观经济特征")
+            macro_cols = [col for col in df.columns if 'MACRO_DIFF' in col]
+            self.logger.info(f"成功添加 {len(macro_cols)} 个宏观经济差异特征")
             self.logger.info(f"新增特征: {macro_cols}")
             
             return df
@@ -574,10 +520,10 @@ class FeatureEngineer:
             return df
 
     def apply_pca(self, df):
-        """应用PCA降维，使用原始数据尺度"""
+        """应用PCA降维，在PCA前进行标准化"""
         try:
             # 选择数值型特征列，排除基础特征
-            essential_cols = ['Open', 'High', 'Low', 'Close', 'reSignal']
+            essential_cols = ['reSignal']
             numeric_cols = df.select_dtypes(include=['float64', 'int64']).columns
             feature_cols = [col for col in numeric_cols if col not in essential_cols]
             
@@ -604,9 +550,13 @@ class FeatureEngineer:
                 self.n_components = len(features.columns)
                 self.logger.warning(f"调整PCA组件数量为: {self.n_components}")
             
-            # 直接使用原始数据进行PCA，不进行标准化
+            # 对特征进行标准化处理
+            scaler = StandardScaler()
+            scaled_features = scaler.fit_transform(features)
+            
+            # 使用标准化后的数据进行PCA
             pca = PCA(n_components=self.n_components)
-            pca_features = pca.fit_transform(features)
+            pca_features = pca.fit_transform(scaled_features)
             
             # 创建PCA特征的DataFrame
             pca_df = pd.DataFrame(
@@ -615,9 +565,35 @@ class FeatureEngineer:
                 index=df.index
             )
             
-            # 添加基础特征
+            # 添加基础特征（使用原始数据）
             for col in essential_cols:
                 pca_df[col] = df[col]
+            
+            # 计算并记录解释方差比
+            explained_variance_ratio = pca.explained_variance_ratio_
+            cumulative_variance_ratio = np.cumsum(explained_variance_ratio)
+            
+            self.logger.info("\nPCA解释方差比:")
+            for i, (var_ratio, cum_ratio) in enumerate(zip(explained_variance_ratio, cumulative_variance_ratio)):
+                self.logger.info(f"PC{i+1}: {var_ratio:.4f} (累计: {cum_ratio:.4f})")
+            
+            # 记录总解释方差
+            total_variance = sum(explained_variance_ratio)
+            self.logger.info(f"\n总解释方差比: {total_variance:.4f}")
+            
+            # 记录每个主成分的特征贡献
+            feature_importance = pd.DataFrame(
+                pca.components_.T,
+                columns=[f'PC{i+1}' for i in range(self.n_components)],
+                index=features.columns
+            )
+            
+            self.logger.info("\n特征对主成分的贡献:")
+            for pc in feature_importance.columns[:3]:  # 只显示前3个主成分
+                top_features = feature_importance[pc].abs().nlargest(5)
+                self.logger.info(f"\n{pc}的主要特征:")
+                for feat, value in top_features.items():
+                    self.logger.info(f"{feat}: {value:.4f}")
             
             return pca_df
             
