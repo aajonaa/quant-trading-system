@@ -767,14 +767,14 @@ class HybridForexModel:
 
             # 创建PSO优化器
             pso = ParticleSwarmOptimizer(
-                n_particles=3,
+                n_particles=2,
                 param_bounds=param_bounds[model_name],
                 model_creator=self._get_model_creator(model_name),
                 is_dl=is_dl
             )
 
             # 运行优化
-            best_params, best_score = pso.optimize(X_train, y_train, X_val, y_val, n_iterations=3)
+            best_params, best_score = pso.optimize(X_train, y_train, X_val, y_val, n_iterations=2)
 
             self.logger.info(f"\nPSO优化结果 ({model_name}):")
             self.logger.info(f"最佳参数: {best_params}")
@@ -885,7 +885,7 @@ class SignalAnalyzer:
         try:
             # 计算基于固定阈值的信号准确性
             returns = df['returns']
-            threshold = 0.00085  # 0.085%
+            threshold = 0.001  # 0.1%
 
             # 生成基于阈值的信号
             predicted_signals = np.zeros_like(returns)

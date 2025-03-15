@@ -220,7 +220,7 @@ class ForexDataManager:
 # 测试代码
 if __name__ == "__main__":
     manager = ForexDataManager()
-    currency_pairs = ["CNYUSD", "CNYAUD", "CNYEUR", "CNYGBP", "CNYJPY"]
+    currency_pairs = ["CNYUSD", "CNYEUR", "CNYGBP", "CNYJPY"]
     start_date = "2015-01-01"
     end_date = datetime.now().strftime("%Y-%m-%d")
     
