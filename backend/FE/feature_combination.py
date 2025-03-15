@@ -154,6 +154,74 @@ class FeatureEngineer:
                 if col != 'reSignal':  # 排除信号列
                     df[col] = df[col].ffill().bfill()
             
+            # 处理无穷值和极端值
+            def clean_and_scale_features(df):
+                # 创建副本避免警告
+                df = df.copy()
+                
+                # 处理无穷值和缺失值
+                for col in df.columns:
+                    if col not in ['reSignal', 'Open', 'High', 'Low', 'Close']:  # 不处理价格和信号数据
+                        # 替换无穷值为NaN
+                        df[col] = df[col].replace([np.inf, -np.inf], np.nan)
+                        # 使用中位数填充NaN
+                        df[col] = df[col].fillna(df[col].median())
+                        
+                        # 限制极端值范围(使用分位数)
+                        q1 = df[col].quantile(0.01)
+                        q3 = df[col].quantile(0.99)
+                        df[col] = df[col].clip(lower=q1, upper=q3)
+                        
+                        # 标准化到合理范围
+                        if df[col].std() != 0:
+                            df[col] = (df[col] - df[col].mean()) / df[col].std()
+                
+                return df
+                
+            # 修复pct_change警告
+            def calculate_changes(df):
+                for col in df.columns:
+                    if '_CHANGE' in col:
+                        # 先处理缺失值,再计算变化率
+                        series = df[col].fillna(method='ffill')
+                        df[col] = series.pct_change(fill_method=None)
+                return df
+                
+            # 优化特征选择
+            def select_features(df):
+                # 定义必须保留的特征
+                essential_features = ['Open', 'High', 'Low', 'Close', 'Volume', 'reSignal']
+                
+                # 计算相关性矩阵
+                corr_matrix = df.corr().abs()
+                upper = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
+                
+                # 找出高度相关的特征对
+                high_corr_pairs = []
+                for col in upper.columns:
+                    highly_correlated = upper[col][upper[col] > 0.95].index.tolist()
+                    for corr_col in highly_correlated:
+                        if col not in essential_features and corr_col not in essential_features:
+                            high_corr_pairs.append((col, corr_col))
+                
+                # 从每对高度相关的特征中删除一个
+                to_drop = set()
+                for feat1, feat2 in high_corr_pairs:
+                    if feat1 not in essential_features and feat2 not in essential_features:
+                        # 保留名字较短的特征（通常是更基础的特征）
+                        if len(feat1) > len(feat2):
+                            to_drop.add(feat1)
+                        else:
+                            to_drop.add(feat2)
+                
+                # 删除选定的特征
+                return df.drop(columns=list(to_drop))
+                
+            # 应用处理函数
+            df = clean_and_scale_features(df)
+            df = calculate_changes(df)
+            df = select_features(df)
+            
             return df
             
         except Exception as e:
@@ -393,27 +461,19 @@ class FeatureEngineer:
                 self.logger.warning(f"货币对 {pair} 包含未知的货币代码")
                 return df
             
-            # 宏观经济指标
-            indicators = {
-                'CPI': '消费者价格指数',
-                'REAL_GDP': '实际国内生产总值',
-                'INFLATION':'通货膨胀率',
-                'REAL_SALES':'实际销售额',
-                'UNEMPLOYMENT':'失业率'
-                # 可以添加更多指标
-            }
+            # 存储每个国家的宏观数据
+            macro_data = {}
             
-            start_date = df.index.min()
-            
-            # 处理每个国家的每个指标
+            # 读取并处理所有宏观数据
             for country in [base_country, quote_country]:
-                for indicator in indicators.keys():
+                # 读取该国所有可用的宏观数据文件
+                macro_dir = self.data_dir.parent / "macro_data"
+                country_files = list(macro_dir.glob(f"{country}_*.csv"))
+                
+                for file_path in country_files:
                     try:
-                        # 读取数据文件
-                        file_path = self.data_dir.parent / "macro_data" / f"{country}_{indicator}.csv"
-                        if not file_path.exists():
-                            self.logger.warning(f"找不到{indicators[indicator]}数据文件: {file_path}")
-                            continue
+                        # 从文件名获取指标名称
+                        indicator = file_path.stem.split('_')[1]
                         
                         # 读取并处理数据
                         data = pd.read_csv(file_path)
@@ -428,38 +488,75 @@ class FeatureEngineer:
                         # 对齐数据到交易日
                         aligned_data = daily_data.reindex(df.index)
                         
-                        # 添加基础特征
-                        col_name = f'{country}_{indicator}'
-                        df[col_name] = aligned_data
+                        # 存储数据
+                        macro_data[f'{country}_{indicator}'] = aligned_data
                         
-                        # 添加变化率（使用日度数据计算）
-                        df[f'{col_name}_CHANGE'] = df[col_name].pct_change()
+                        # 添加基础特征
+                        df[f'{country}_{indicator}'] = aligned_data
+                        
+                        # 添加变化率
+                        df[f'{country}_{indicator}_CHANGE'] = df[f'{country}_{indicator}'].pct_change()
 
-                        # 添加波动率（基于日度数据）
-                        df[f'{col_name}_VOL'] = df[col_name].rolling(30).std()
+                        # 添加波动率
+                        df[f'{country}_{indicator}_VOL'] = df[f'{country}_{indicator}'].rolling(30).std()
                         
                     except Exception as e:
                         self.logger.error(f"处理{country}_{indicator}数据失败: {str(e)}")
                         continue
             
-            # 计算国家间差值特征
-            for indicator in indicators.keys():
-                base_col = f'{base_country}_{indicator}'
-                quote_col = f'{quote_country}_{indicator}'
-                if base_col in df.columns and quote_col in df.columns:
-                    df[f'{indicator}_DIFF'] = df[base_col] - df[quote_col]
-                    df[f'{indicator}_RATIO'] = df[base_col] / df[quote_col]
-                    df[f'{indicator}_SPREAD'] = (df[base_col] - df[quote_col]) / df[quote_col]
+            # 计算所有可能的宏观指标组合的差异特征
+            base_indicators = [k for k in macro_data.keys() if k.startswith(base_country)]
+            quote_indicators = [k for k in macro_data.keys() if k.startswith(quote_country)]
             
-            # 处理可能的极端值
-            numeric_cols = df.select_dtypes(include=[np.float64, np.int64]).columns
-            for col in numeric_cols:
+            # 创建一个字典来存储所有新特征
+            new_features = {}
+
+            for base_ind in base_indicators:
+                for quote_ind in quote_indicators:
+                    try:
+                        # 提取指标名称
+                        base_name = base_ind.split('_')[1]
+                        quote_name = quote_ind.split('_')[1]
+                        
+                        # 跳过相同指标的比较
+                        if base_name == quote_name:
+                            continue
+                            
+                        feature_name = f'MACRO_DIFF_{base_name}_{quote_name}'
+                        
+                        # 计算差异特征
+                        new_features[feature_name] = macro_data[base_ind] - macro_data[quote_ind]
+                        new_features[f'{feature_name}_RATIO'] = macro_data[base_ind] / macro_data[quote_ind]
+                        new_features[f'{feature_name}_SPREAD'] = (macro_data[base_ind] - macro_data[quote_ind]) / macro_data[quote_ind]
+                        
+                    except Exception as e:
+                        self.logger.error(f"计算宏观差异特征失败: {str(e)}")
+                        continue
+
+            # 一次性添加所有新特征到DataFrame
+            df = pd.concat([df, pd.DataFrame(new_features)], axis=1)
+
+            # 处理可能的极端值和无穷值
+            for col in df.columns:
                 if col != 'reSignal':
+                    # 处理无穷值
+                    df[col] = df[col].replace([np.inf, -np.inf], np.nan)
+                    # 使用中位数填充缺失值
+                    df[col] = df[col].fillna(df[col].median())
+                    # 限制极端值
                     df[col] = df[col].clip(lower=df[col].quantile(0.01), 
-                                         upper=df[col].quantile(0.99))
+                                          upper=df[col].quantile(0.99))
+
+            # 修复性能警告
+            df = df.copy()  # 创建DataFrame的副本以解决内存碎片问题
+
+            # 修复pct_change警告
+            for col in df.columns:
+                if '_CHANGE' in col:
+                    df[col] = df[col].pct_change(fill_method=None)
             
             # 输出添加的特征信息
-            macro_cols = [col for col in df.columns if any(c in col for c in [base_country, quote_country])]
+            macro_cols = [col for col in df.columns if 'MACRO' in col or any(c in col for c in [base_country, quote_country])]
             self.logger.info(f"成功添加 {len(macro_cols)} 个宏观经济特征")
             self.logger.info(f"新增特征: {macro_cols}")
             
