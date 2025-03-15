@@ -156,25 +156,32 @@ class FeatureEngineer:
             
             # 处理无穷值和极端值
             def clean_and_scale_features(df):
+                """清理特征，但不进行标准化"""
                 # 创建副本避免警告
                 df = df.copy()
                 
-                # 处理无穷值和缺失值
+                # 价格和信号特征列表
+                price_cols = ['Open', 'High', 'Low', 'Close']
+                essential_cols = price_cols + ['reSignal']
+                
+                # 处理非基础特征
                 for col in df.columns:
-                    if col not in ['reSignal', 'Open', 'High', 'Low', 'Close']:  # 不处理价格和信号数据
-                        # 替换无穷值为NaN
-                        df[col] = df[col].replace([np.inf, -np.inf], np.nan)
-                        # 使用中位数填充NaN
-                        df[col] = df[col].fillna(df[col].median())
+                    if col not in essential_cols:
+                        # 替换无穷值为0
+                        df[col] = df[col].replace([np.inf, -np.inf], 0)
+                        
+                        # 使用前向填充处理缺失值
+                        df[col] = df[col].fillna(method='ffill')
+                        # 使用后向填充处理剩余的缺失值
+                        df[col] = df[col].fillna(method='bfill')
+                        # 如果仍有缺失值，用0填充
+                        df[col] = df[col].fillna(0)
                         
                         # 限制极端值范围(使用分位数)
-                        q1 = df[col].quantile(0.01)
-                        q3 = df[col].quantile(0.99)
-                        df[col] = df[col].clip(lower=q1, upper=q3)
-                        
-                        # 标准化到合理范围
-                        if df[col].std() != 0:
-                            df[col] = (df[col] - df[col].mean()) / df[col].std()
+                        if df[col].std() != 0:  # 只处理非常数列
+                            q1 = df[col].quantile(0.01)
+                            q3 = df[col].quantile(0.99)
+                            df[col] = df[col].clip(lower=q1, upper=q3)
                 
                 return df
                 
@@ -190,7 +197,7 @@ class FeatureEngineer:
             # 优化特征选择
             def select_features(df):
                 # 定义必须保留的特征
-                essential_features = ['Open', 'High', 'Low', 'Close', 'Volume', 'reSignal']
+                essential_features = ['Open', 'High', 'Low', 'Close', 'reSignal']
                 
                 # 计算相关性矩阵
                 corr_matrix = df.corr().abs()
@@ -567,20 +574,39 @@ class FeatureEngineer:
             return df
 
     def apply_pca(self, df):
-        """应用PCA降维"""
+        """应用PCA降维，使用原始数据尺度"""
         try:
-            # 选择数值型特征列，排除reSignal列
+            # 选择数值型特征列，排除基础特征
+            essential_cols = ['Open', 'High', 'Low', 'Close', 'reSignal']
             numeric_cols = df.select_dtypes(include=['float64', 'int64']).columns
-            numeric_cols = numeric_cols[numeric_cols != 'reSignal']
-            features = df[numeric_cols]
+            feature_cols = [col for col in numeric_cols if col not in essential_cols]
             
-            # 标准化
-            scaler = StandardScaler()
-            scaled_features = scaler.fit_transform(features)
+            if not feature_cols:
+                self.logger.error("没有可用于PCA的特征")
+                return None
             
-            # 应用PCA
+            features = df[feature_cols]
+            
+            # 检查数据是否包含无穷值或NaN
+            if np.any(np.isinf(features)) or np.any(np.isnan(features)):
+                self.logger.warning("数据中包含无穷值或NaN，进行清理...")
+                features = features.replace([np.inf, -np.inf], 0)
+                features = features.fillna(0)
+            
+            # 检查是否有常数列
+            constant_cols = features.columns[features.std() == 0]
+            if len(constant_cols) > 0:
+                self.logger.warning(f"删除常数列: {constant_cols}")
+                features = features.drop(columns=constant_cols)
+            
+            # 检查剩余特征数量
+            if len(features.columns) < self.n_components:
+                self.n_components = len(features.columns)
+                self.logger.warning(f"调整PCA组件数量为: {self.n_components}")
+            
+            # 直接使用原始数据进行PCA，不进行标准化
             pca = PCA(n_components=self.n_components)
-            pca_features = pca.fit_transform(scaled_features)
+            pca_features = pca.fit_transform(features)
             
             # 创建PCA特征的DataFrame
             pca_df = pd.DataFrame(
@@ -589,16 +615,9 @@ class FeatureEngineer:
                 index=df.index
             )
             
-            # 添加reSignal列
-            pca_df['reSignal'] = df['reSignal']
-            
-            # 计算解释方差比
-            explained_variance_ratio = pca.explained_variance_ratio_
-            cumulative_variance_ratio = np.cumsum(explained_variance_ratio)
-            
-            self.logger.info("PCA解释方差比:")
-            for i, (var_ratio, cum_ratio) in enumerate(zip(explained_variance_ratio, cumulative_variance_ratio)):
-                self.logger.info(f"PC{i+1}: {var_ratio:.4f} (累计: {cum_ratio:.4f})")
+            # 添加基础特征
+            for col in essential_cols:
+                pca_df[col] = df[col]
             
             return pca_df
             
