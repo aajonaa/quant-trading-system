@@ -541,7 +541,7 @@ class HybridForexModel:
     def load_data(self, pair):
         """加载原始数据"""
         try:
-            file_path = self.data_dir / f"{pair}_PCA.csv"
+            file_path = self.data_dir / f"{pair}_processed.csv"
             self.logger.info(f"加载数据: {file_path}")
 
             # 检查文件是否存在
@@ -554,7 +554,7 @@ class HybridForexModel:
             df.set_index('Date', inplace=True)
 
             # 记录特征数量（用于创建深度学习模型）
-            self.n_features = len(df.columns) - 5  # 排除 Open, High, Low, Close, reSignal
+            self.n_features = len(df.columns) - 3  # 排除 'returns', 'log_returns', 'reSignal'
 
             self.logger.info(f"成功加载数据，形状: {df.shape}")
             return df
@@ -571,7 +571,7 @@ class HybridForexModel:
 
             # 定义要排除的列
             exclude_cols = [
-                'Open', 'High', 'Low', 'Close', 'reSignal',
+                'reSignal',
                 'returns', 'log_returns'  # 添加这两个要排除的特征
             ]
 

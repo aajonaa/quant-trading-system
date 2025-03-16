@@ -42,7 +42,7 @@ indicators = {
         "REAL_GDP": "CHNGDPNQDSMEI",
         "INFLATION": "CHNCPIALLMINMEI",
         "CPI": "CHNCPIALLMINMEI",
-        "UNEMPLOYMENT": "LMUNRRTTCNM156S",
+        "UNEMPLOYMENT": None,  # 中国失业率数据将使用默认值
     },
     "AU": {
         "REAL_GDP": "AUSGDPRQDSMEI",
@@ -60,6 +60,18 @@ def calculate_yoy_change(series):
     """计算同比变化率"""
     return series.pct_change(periods=12, fill_method=None) * 100
 
+def generate_default_unemployment():
+    """生成中国的默认失业率数据"""
+    start_date = pd.to_datetime(START_DATE)
+    end_date = pd.to_datetime(END_DATE)
+    date_range = pd.date_range(start=start_date, end=end_date, freq='ME')
+    
+    # 创建默认2%失业率的时间序列
+    df = pd.DataFrame(index=date_range)
+    df['UNEMPLOYMENT'] = 2.0
+    df.index.name = 'date'
+    return df
+
 def download_macro_data():
     start_date = pd.to_datetime(START_DATE)
     end_date = pd.to_datetime(END_DATE)
@@ -72,27 +84,32 @@ def download_macro_data():
             try:
                 print(f"正在下载 {country} - {indicator_name} 数据...")
                 
-                # 获取数据
-                data = fred.get_series(series_id, start_date, end_date)
-                
-                if data.empty:
-                    print(f"警告: {country} - {indicator_name} 没有数据")
-                    indicator_availability.setdefault(indicator_name, set()).add(False)
-                    continue
-                
-                # 创建DataFrame
-                df = pd.DataFrame(data, columns=[indicator_name])
-                df.index.name = 'date'
-                
-                # 对于CPI和INFLATION计算同比变化率
-                if indicator_name in ['CPI', 'INFLATION']:
-                    df[f"{indicator_name}_YOY"] = calculate_yoy_change(df[indicator_name])
-                
-                # 处理缺失值
-                df = df.ffill().bfill()
-                
-                # 重采样为月度数据
-                df = df.resample('ME').last()
+                # 处理中国失业率特殊情况
+                if country == "CN" and indicator_name == "UNEMPLOYMENT":
+                    df = generate_default_unemployment()
+                    print("使用默认值2%生成中国失业率数据")
+                else:
+                    # 获取数据
+                    data = fred.get_series(series_id, start_date, end_date)
+                    
+                    if data.empty:
+                        print(f"警告: {country} - {indicator_name} 没有数据")
+                        indicator_availability.setdefault(indicator_name, set()).add(False)
+                        continue
+                    
+                    # 创建DataFrame
+                    df = pd.DataFrame(data, columns=[indicator_name])
+                    df.index.name = 'date'
+                    
+                    # 对于CPI和INFLATION计算同比变化率
+                    if indicator_name in ['CPI', 'INFLATION']:
+                        df[f"{indicator_name}_YOY"] = calculate_yoy_change(df[indicator_name])
+                    
+                    # 处理缺失值
+                    df = df.ffill().bfill()
+                    
+                    # 重采样为月度数据
+                    df = df.resample('ME').last()
                 
                 # 打印数据范围
                 print(f"数据时间范围: {df.index.min()} 到 {df.index.max()}")

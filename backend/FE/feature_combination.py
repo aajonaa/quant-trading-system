@@ -95,10 +95,10 @@ class FeatureEngineer:
             df['returns'] = df['returns'].fillna(0)
             df['volatility'] = df['volatility'].ffill().bfill()
             
-            # 3. 添加宏观经济特征
-            self.logger.info(f"开始添加宏观经济特征: {pair}")
-            df = self._add_macro_features(df, pair)
-            self.logger.info(f"完成添加宏观经济特征")
+            # # 3. 添加宏观经济特征
+            # self.logger.info(f"开始添加宏观经济特征: {pair}")
+            # df = self._add_macro_features(df, pair)
+            # self.logger.info(f"完成添加宏观经济特征")
             
             # 4. 生成交易信号
             df['reSignal'] = 0  # 默认为中性信号
@@ -397,160 +397,160 @@ class FeatureEngineer:
             self.logger.error(f"添加ICEEMDAN分解特征失败: {str(e)}")
             return None
 
-    def _interpolate_macro_data(self, data):
-        """使用线性回归方法将低频数据转换为日度数据"""
-        try:
-            # 创建完整的日期范围
-            date_range = pd.date_range(start=data.index.min(), end=data.index.max(), freq='D')
-            
-            # 获取数值列名
-            value_col = data.select_dtypes(include=['float64', 'int64']).columns[0]
-            
-            # 检查数据是否为常数
-            if data[value_col].std() == 0:
-                self.logger.warning(f"数据为常数值: {value_col} = {data[value_col].iloc[0]}")
-                return pd.Series(data[value_col].iloc[0], index=date_range)
-            
-            # 创建包含所有日期的DataFrame
-            daily_data = pd.DataFrame(index=date_range)
-            daily_data['time_idx'] = (daily_data.index - daily_data.index[0]).days
-            daily_data[value_col] = np.nan
-            
-            # 将原始数据合并到日度数据中
-            daily_data.loc[data.index, value_col] = data[value_col]
-            
-            # 对每个非空区间进行线性回归
-            non_null_dates = daily_data[daily_data[value_col].notna()].index
-            
-            if len(non_null_dates) >= 2:
-                # 将日期转换为时间戳以进行回归
-                X = daily_data.loc[non_null_dates, 'time_idx'].values.reshape(-1, 1)
-                y = daily_data.loc[non_null_dates, value_col].values
-                
-                # 添加日志输出
-                self.logger.debug(f"回归数据点数量: {len(non_null_dates)}")
-                self.logger.debug(f"X范围: {X.min()} - {X.max()}")
-                self.logger.debug(f"y范围: {y.min()} - {y.max()}")
-                
-                # 训练回归模型
-                reg = LinearRegression()
-                reg.fit(X, y)
-                
-                # 对所有日期进行预测
-                X_all = daily_data['time_idx'].values.reshape(-1, 1)
-                filled_values = reg.predict(X_all)
-                
-                # 创建填充后的序列
-                filled_data = pd.Series(filled_values, index=daily_data.index)
-                
-                # 保持原始数据点不变
-                filled_data[non_null_dates] = daily_data.loc[non_null_dates, value_col]
-                
-                # 检查插值结果
-                if filled_data.std() == 0:
-                    self.logger.warning(f"插值结果为常数: {value_col}")
-                else:
-                    self.logger.debug(f"插值结果范围: {filled_data.min()} - {filled_data.max()}")
-                
-                return filled_data
-            else:
-                self.logger.warning(f"数据点不足以进行回归: {len(non_null_dates)} 个点")
-                return None
-            
-        except Exception as e:
-            self.logger.error(f"宏观数据插值失败: {str(e)}")
-            return None
-
-    def _add_macro_features(self, df, pair):
-        """添加宏观经济特征"""
-        try:
-            # 获取基础货币和报价货币，并进行映射转换
-            currency_map = {
-                'CNY': 'CN',
-                'EUR': 'EU',
-                'GBP': 'UK',
-                'USD': 'US',
-                'JPY': 'JP'
-            }
-            
-            base_country = currency_map.get(pair[:3], pair[:3])
-            quote_country = currency_map.get(pair[3:], pair[3:])
-            
-            # 检查宏观数据目录是否存在
-            if not self.macro_dir.exists():
-                self.logger.error(f"宏观数据目录不存在: {self.macro_dir}")
-                return df
-            
-            # 定义宏观指标及其文件名映射
-            indicators = {
-                'CPI': {'file': 'CPI', 'value_col': 'CPI'},
-                'INFLATION': {'file': 'INFLATION', 'value_col': 'INFLATION'},
-                'REAL_GDP': {'file': 'REAL_GDP', 'value_col': 'REAL_GDP'},
-                'RETAIL_SALES': {'file': 'RETAIL_SALES', 'value_col': 'RETAIL_SALES'},
-                'UNEMPLOYMENT': {'file': 'UNEMPLOYMENT', 'value_col': 'UNEMPLOYMENT'},
-            }
-            
-            # 加载宏观数据
-            for ind_name, ind_info in indicators.items():
-                try:
-                    # 加载基础货币国家数据
-                    base_file = self.macro_dir / f"{base_country}_{ind_info['file']}.csv"
-                    quote_file = self.macro_dir / f"{quote_country}_{ind_info['file']}.csv"
-                    
-                    if not base_file.exists() or not quote_file.exists():
-                        self.logger.warning(f"找不到宏观数据文件: {base_file} 或 {quote_file}")
-                        continue
-                        
-                    # 读取数据
-                    base_data = pd.read_csv(base_file)
-                    quote_data = pd.read_csv(quote_file)
-                    
-                    # 确保日期列存在
-                    date_col = next((col for col in base_data.columns if col.lower() == 'date'), None)
-                    if not date_col:
-                        self.logger.error(f"数据文件缺少date列: {base_file}")
-                        continue
-                        
-                    # 转换日期格式并设置索引
-                    base_data[date_col] = pd.to_datetime(base_data[date_col])
-                    quote_data[date_col] = pd.to_datetime(quote_data[date_col])
-                    base_data.set_index(date_col, inplace=True)
-                    quote_data.set_index(date_col, inplace=True)
-                    
-                    # 对基础货币和报价货币数据进行插值
-                    base_interpolated = self._interpolate_macro_data(base_data)
-                    quote_interpolated = self._interpolate_macro_data(quote_data)
-                    
-                    if base_interpolated is None or quote_interpolated is None:
-                        self.logger.error(f"插值失败: {ind_name}")
-                        continue
-                    
-                    # 对齐数据到交易日期
-                    aligned_base = base_interpolated.reindex(df.index)
-                    aligned_quote = quote_interpolated.reindex(df.index)
-                    
-                    # 计算差异指标
-                    df[f"{ind_name}_DIFF"] = aligned_base - aligned_quote
-                    df[f"{ind_name}_RATIO"] = aligned_base / aligned_quote
-                    df[f"{ind_name}_SPREAD"] = (aligned_base - aligned_quote) / aligned_quote
-                    
-                except Exception as e:
-                    self.logger.error(f"处理{ind_name}指标失败: {str(e)}")
-                    continue
-                
-            # 处理缺失值
-            macro_cols = [col for col in df.columns if any(ind in col for ind in indicators.keys())]
-            for col in macro_cols:
-                df[col] = df[col].ffill().bfill().fillna(0)
-            
-            self.logger.info(f"成功添加 {len(macro_cols)} 个宏观经济差异特征")
-            self.logger.info(f"新增特征: {macro_cols}")
-            
-            return df
-            
-        except Exception as e:
-            self.logger.error(f"添加宏观经济特征失败: {str(e)}")
-            return df
+    # def _interpolate_macro_data(self, data):
+    #     """使用线性回归方法将低频数据转换为日度数据"""
+    #     try:
+    #         # 创建完整的日期范围
+    #         date_range = pd.date_range(start=data.index.min(), end=data.index.max(), freq='D')
+    #
+    #         # 获取数值列名
+    #         value_col = data.select_dtypes(include=['float64', 'int64']).columns[0]
+    #
+    #         # 检查数据是否为常数
+    #         if data[value_col].std() == 0:
+    #             self.logger.warning(f"数据为常数值: {value_col} = {data[value_col].iloc[0]}")
+    #             return pd.Series(data[value_col].iloc[0], index=date_range)
+    #
+    #         # 创建包含所有日期的DataFrame
+    #         daily_data = pd.DataFrame(index=date_range)
+    #         daily_data['time_idx'] = (daily_data.index - daily_data.index[0]).days
+    #         daily_data[value_col] = np.nan
+    #
+    #         # 将原始数据合并到日度数据中
+    #         daily_data.loc[data.index, value_col] = data[value_col]
+    #
+    #         # 对每个非空区间进行线性回归
+    #         non_null_dates = daily_data[daily_data[value_col].notna()].index
+    #
+    #         if len(non_null_dates) >= 2:
+    #             # 将日期转换为时间戳以进行回归
+    #             X = daily_data.loc[non_null_dates, 'time_idx'].values.reshape(-1, 1)
+    #             y = daily_data.loc[non_null_dates, value_col].values
+    #
+    #             # 添加日志输出
+    #             self.logger.debug(f"回归数据点数量: {len(non_null_dates)}")
+    #             self.logger.debug(f"X范围: {X.min()} - {X.max()}")
+    #             self.logger.debug(f"y范围: {y.min()} - {y.max()}")
+    #
+    #             # 训练回归模型
+    #             reg = LinearRegression()
+    #             reg.fit(X, y)
+    #
+    #             # 对所有日期进行预测
+    #             X_all = daily_data['time_idx'].values.reshape(-1, 1)
+    #             filled_values = reg.predict(X_all)
+    #
+    #             # 创建填充后的序列
+    #             filled_data = pd.Series(filled_values, index=daily_data.index)
+    #
+    #             # 保持原始数据点不变
+    #             filled_data[non_null_dates] = daily_data.loc[non_null_dates, value_col]
+    #
+    #             # 检查插值结果
+    #             if filled_data.std() == 0:
+    #                 self.logger.warning(f"插值结果为常数: {value_col}")
+    #             else:
+    #                 self.logger.debug(f"插值结果范围: {filled_data.min()} - {filled_data.max()}")
+    #
+    #             return filled_data
+    #         else:
+    #             self.logger.warning(f"数据点不足以进行回归: {len(non_null_dates)} 个点")
+    #             return None
+    #
+    #     except Exception as e:
+    #         self.logger.error(f"宏观数据插值失败: {str(e)}")
+    #         return None
+    #
+    # def _add_macro_features(self, df, pair):
+    #     """添加宏观经济特征"""
+    #     try:
+    #         # 获取基础货币和报价货币，并进行映射转换
+    #         currency_map = {
+    #             'CNY': 'CN',
+    #             'EUR': 'EU',
+    #             'GBP': 'UK',
+    #             'USD': 'US',
+    #             'JPY': 'JP'
+    #         }
+    #
+    #         base_country = currency_map.get(pair[:3], pair[:3])
+    #         quote_country = currency_map.get(pair[3:], pair[3:])
+    #
+    #         # 检查宏观数据目录是否存在
+    #         if not self.macro_dir.exists():
+    #             self.logger.error(f"宏观数据目录不存在: {self.macro_dir}")
+    #             return df
+    #
+    #         # 定义宏观指标及其文件名映射
+    #         indicators = {
+    #             'CPI': {'file': 'CPI', 'value_col': 'CPI'},
+    #             'INFLATION': {'file': 'INFLATION', 'value_col': 'INFLATION'},
+    #             'REAL_GDP': {'file': 'REAL_GDP', 'value_col': 'REAL_GDP'},
+    #             'RETAIL_SALES': {'file': 'RETAIL_SALES', 'value_col': 'RETAIL_SALES'},
+    #             'UNEMPLOYMENT': {'file': 'UNEMPLOYMENT', 'value_col': 'UNEMPLOYMENT'},
+    #         }
+    #
+    #         # 加载宏观数据
+    #         for ind_name, ind_info in indicators.items():
+    #             try:
+    #                 # 加载基础货币国家数据
+    #                 base_file = self.macro_dir / f"{base_country}_{ind_info['file']}.csv"
+    #                 quote_file = self.macro_dir / f"{quote_country}_{ind_info['file']}.csv"
+    #
+    #                 if not base_file.exists() or not quote_file.exists():
+    #                     self.logger.warning(f"找不到宏观数据文件: {base_file} 或 {quote_file}")
+    #                     continue
+    #
+    #                 # 读取数据
+    #                 base_data = pd.read_csv(base_file)
+    #                 quote_data = pd.read_csv(quote_file)
+    #
+    #                 # 确保日期列存在
+    #                 date_col = next((col for col in base_data.columns if col.lower() == 'date'), None)
+    #                 if not date_col:
+    #                     self.logger.error(f"数据文件缺少date列: {base_file}")
+    #                     continue
+    #
+    #                 # 转换日期格式并设置索引
+    #                 base_data[date_col] = pd.to_datetime(base_data[date_col])
+    #                 quote_data[date_col] = pd.to_datetime(quote_data[date_col])
+    #                 base_data.set_index(date_col, inplace=True)
+    #                 quote_data.set_index(date_col, inplace=True)
+    #
+    #                 # 对基础货币和报价货币数据进行插值
+    #                 base_interpolated = self._interpolate_macro_data(base_data)
+    #                 quote_interpolated = self._interpolate_macro_data(quote_data)
+    #
+    #                 if base_interpolated is None or quote_interpolated is None:
+    #                     self.logger.error(f"插值失败: {ind_name}")
+    #                     continue
+    #
+    #                 # 对齐数据到交易日期
+    #                 aligned_base = base_interpolated.reindex(df.index)
+    #                 aligned_quote = quote_interpolated.reindex(df.index)
+    #
+    #                 # 计算差异指标
+    #                 df[f"{ind_name}_DIFF"] = aligned_base - aligned_quote
+    #                 df[f"{ind_name}_RATIO"] = aligned_base / aligned_quote
+    #                 df[f"{ind_name}_SPREAD"] = (aligned_base - aligned_quote) / aligned_quote
+    #
+    #             except Exception as e:
+    #                 self.logger.error(f"处理{ind_name}指标失败: {str(e)}")
+    #                 continue
+    #
+    #         # 处理缺失值
+    #         macro_cols = [col for col in df.columns if any(ind in col for ind in indicators.keys())]
+    #         for col in macro_cols:
+    #             df[col] = df[col].ffill().bfill().fillna(0)
+    #
+    #         self.logger.info(f"成功添加 {len(macro_cols)} 个宏观经济差异特征")
+    #         self.logger.info(f"新增特征: {macro_cols}")
+    #
+    #         return df
+    #
+    #     except Exception as e:
+    #         self.logger.error(f"添加宏观经济特征失败: {str(e)}")
+    #         return df
 
     def apply_pca(self, df):
         """应用PCA降维，在PCA前进行标准化"""
