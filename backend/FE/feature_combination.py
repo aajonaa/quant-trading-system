@@ -91,7 +91,7 @@ class FeatureEngineer:
             df['volatility'] = df['returns'].rolling(window=20).std()
             
             # 2. 处理基础特征的缺失值
-            df['returns'] = df['returns'].fillna(0)
+            df['returns'] = df['returns'].ffill().bfill()
             df['volatility'] = df['volatility'].ffill().bfill()
             
             # 3. 添加宏观经济特征
@@ -214,11 +214,11 @@ class FeatureEngineer:
                         df[col] = df[col].replace([np.inf, -np.inf], 0)
                         
                         # 使用前向填充处理缺失值
-                        df[col] = df[col].fillna(method='ffill')
+                        df[col] = df[col].ffill
                         # 使用后向填充处理剩余的缺失值
-                        df[col] = df[col].fillna(method='bfill')
+                        df[col] = df[col].bfill
                         # 如果仍有缺失值，用0填充
-                        df[col] = df[col].fillna(0)
+                        df[col] = df[col].ffill(0).bfill(0)
                         
                         # 限制极端值范围(使用分位数)
                         if df[col].std() != 0:  # 只处理非常数列
@@ -233,7 +233,7 @@ class FeatureEngineer:
                 for col in df.columns:
                     if '_CHANGE' in col:
                         # 先处理缺失值,再计算变化率
-                        series = df[col].fillna(method='ffill')
+                        series = df[col].ffill
                         df[col] = series.pct_change(fill_method=None)
                 return df
                 
@@ -426,9 +426,9 @@ class FeatureEngineer:
             imf_features['imf_weighted_sum'] = sum(imf_features[f'imf_{i}'] * (1 / (i + 1)) for i in range(len(imfs)))
             
             # 前向填充缺失值
-            imf_features = imf_features.fillna(method='ffill')
+            imf_features = imf_features.ffill()
             # 后向填充剩余的缺失值
-            imf_features = imf_features.fillna(method='bfill')
+            imf_features = imf_features.bfill()
             
             # 将IMF特征合并到原始DataFrame
             df = pd.concat([df, imf_features], axis=1)
@@ -491,7 +491,7 @@ class FeatureEngineer:
             if np.any(np.isinf(features)) or np.any(np.isnan(features)):
                 self.logger.warning("数据中包含无穷值或NaN，进行清理...")
                 features = features.replace([np.inf, -np.inf], 0)
-                features = features.fillna(0)
+                features = features.ffill(0).bffill(0)
             
             # 检查是否有常数列
             constant_cols = features.columns[features.std() == 0]
@@ -733,80 +733,115 @@ class FeatureEngineer:
             return None
 
     def _add_macro_features(self, df, pair):
-        """添加宏观经济特征，包括指标差异、比率和价差"""
+        """添加宏观经济特征，包括指标差异"""
         try:
             # 获取货币对的两个国家代码
             country1, country2 = self._get_countries(pair)
             if not country1 or not country2:
                 return df
             
-            # 定义宏观指标及其对应的列名
-            macro_indicators = {
-                'CPI': ['CPI', 'CPI_YOY'],
-                'INFLATION': ['INFLATION', 'INFLATION_YOY'],
-                'REAL_GDP': ['REAL_GDP'],
-                'UNEMPLOYMENT': ['UNEMPLOYMENT']
+            self.logger.info(f"处理国家对: {country1}-{country2}")
+            
+            # 定义宏观指标及其对应的列名和特征类型
+            indicators_config = {
+                'CPI': {
+                    'columns': ['CPI', 'CPI_YOY'],
+                    'features': ['diff']
+                },
+                'INFLATION': {
+                    'columns': ['INFLATION', 'INFLATION_YOY'],
+                    'features': ['diff']
+                },
+                'REAL_GDP': {
+                    'columns': ['REAL_GDP'],
+                    'features': ['diff']
+                },
+                'UNEMPLOYMENT': {
+                    'columns': ['UNEMPLOYMENT'],
+                    'features': ['diff']
+                }
             }
             
-            macro_data = {}
+            macro_data = {country1: {}, country2: {}}
             
             # 加载并处理宏观数据
             for country in [country1, country2]:
-                country_data = {}
-                for indicator, columns in macro_indicators.items():
+                for indicator, config in indicators_config.items():
                     file_path = os.path.join(self.macro_dir, f'{country}_{indicator}.csv')
+                    self.logger.info(f"尝试读取文件: {file_path}")
+                    
                     if os.path.exists(file_path):
-                        data = pd.read_csv(file_path, index_col='date', parse_dates=True)
-                        # 确保只处理指定的列
-                        data = data[columns]
-                        # 转换为数值类型
-                        for col in columns:
-                            data[col] = pd.to_numeric(data[col], errors='coerce')
-                        # 进行插值处理    
-                        data = self._interpolate_macro_data(data)
-                        if data is not None:
-                            country_data[indicator] = data
-                macro_data[country] = country_data
+                        try:
+                            # 读取数据
+                            data = pd.read_csv(file_path, index_col='date', parse_dates=True)
+                            self.logger.info(f"成功读取{country}_{indicator}数据，形状: {data.shape}")
+                            
+                            # 只选择需要的列
+                            data = data[config['columns']]
+                            
+                            # 转换为数值类型并检查是否有效
+                            for col in config['columns']:
+                                data[col] = pd.to_numeric(data[col], errors='coerce')
+                                non_null_count = data[col].count()
+                                self.logger.info(f"{country}_{indicator}_{col} 有效数据点数: {non_null_count}")
+                            
+                            # 进行插值处理
+                            data = self._interpolate_macro_data(data)
+                            if data is not None:
+                                macro_data[country][indicator] = data
+                                self.logger.info(f"成功处理 {country}_{indicator} 数据")
+                            else:
+                                self.logger.error(f"插值处理失败: {country}_{indicator}")
+                                
+                        except Exception as e:
+                            self.logger.error(f"处理{country}_{indicator}数据失败: {str(e)}")
+                            continue
+                    else:
+                        self.logger.warning(f"文件不存在: {file_path}")
             
-            # 计算每个指标的特征
-            for indicator, columns in macro_indicators.items():
+            # 计算特征
+            for indicator, config in indicators_config.items():
                 if indicator in macro_data[country1] and indicator in macro_data[country2]:
-                    for col in columns:
-                        # 差异特征
-                        diff_col = f'{indicator}_{col}_diff'
-                        df[diff_col] = macro_data[country1][indicator][col] - \
-                                     macro_data[country2][indicator][col]
-                        df[diff_col] = df[diff_col].ffill().bfill()
-                        
-                        # 比率特征
-                        ratio_col = f'{indicator}_{col}_ratio'
-                        df[ratio_col] = macro_data[country1][indicator][col] / \
-                                      macro_data[country2][indicator][col]
-                        df[ratio_col] = df[ratio_col].ffill().bfill()
-                        
-                        # 价差特征
-                        spread_col = f'{indicator}_{col}_spread'
-                        df[spread_col] = (macro_data[country1][indicator][col] - \
-                                        macro_data[country2][indicator][col]) / \
-                                       macro_data[country2][indicator][col]
-                        df[spread_col] = df[spread_col].ffill().bfill()
-                        
-                        # 处理无穷大和NaN值
-                        df[diff_col] = df[diff_col].replace([np.inf, -np.inf], np.nan).fillna(0)
-                        df[ratio_col] = df[ratio_col].replace([np.inf, -np.inf], np.nan).fillna(1)
-                        df[spread_col] = df[spread_col].replace([np.inf, -np.inf], np.nan).fillna(0)
-                        
-                        # 处理异常值
-                        self.handle_outliers(df, [diff_col, ratio_col, spread_col])
-                        
-                        # 添加滞后特征
-                        lag_periods = [1, 3, 6, 12]
-                        for lag in lag_periods:
-                            for feature_col in [diff_col, ratio_col, spread_col]:
-                                lag_col = f'{feature_col}_lag_{lag}'
-                                df[lag_col] = df[feature_col].shift(lag)
-                                df[lag_col] = df[lag_col].ffill().bfill()
+                    self.logger.info(f"开始计算 {indicator} 特征")
+                    
+                    for col in config['columns']:
+                        try:
+                            data1 = macro_data[country1][indicator][col]
+                            data2 = macro_data[country2][indicator][col]
+                            
+                            # 生成特征
+                            features = {
+                                'diff': (data1 - data2, 0),  # (计算公式, 默认填充值)
+                            }
+                            
+                            # 为每个特征类型创建列
+                            for feat_type in config['features']:
+                                feat_name = f'{indicator}_{col}_{feat_type}'
+                                calc_formula, fill_value = features[feat_type]
+                                
+                                # 计算特征值
+                                df[feat_name] = calc_formula
+                                
+                                # 处理缺失值和异常值
+                                df[feat_name] = df[feat_name].replace([np.inf, -np.inf], np.nan)
+                                df[feat_name] = df[feat_name].ffill().bfill()
+                                df[feat_name] = df[feat_name].fillna(fill_value)
+                                
+                                # 处理异常值
+                                self.handle_outliers(df, [feat_name])
+                                
+                                self.logger.info(f"成功创建特征: {feat_name}")
 
+                        except Exception as e:
+                            self.logger.error(f"计算{indicator}_{col}特征失败: {str(e)}")
+                            continue
+                else:
+                    self.logger.warning(f"{indicator} 数据在两个国家中不完整")
+            
+            # 输出最终生成的特征列表
+            macro_features = [col for col in df.columns if any(ind in col for ind in indicators_config.keys())]
+            self.logger.info(f"生成的宏观特征列表: {macro_features}")
+            
             return df
             
         except Exception as e:
