@@ -69,208 +69,153 @@ class FeatureEngineer:
             return None
             
     def create_features(self, df):
-        """创建特征"""
+        """创建特征并生成交易信号"""
         try:
-            # 获取货币对名称，但保持时间索引名称为'Date'
+            # 设置DataFrame的货币对属性
             pair = df.name if hasattr(df, 'name') else None
             if pair is None:
-                # 从DataFrame的属性中获取货币对名称
                 pair = getattr(df, 'currency_pair', None)
-                
-                if pair is None or pair == "":
+                if pair is None:
                     self.logger.error("无法确定货币对名称")
                     return None
-                
-                # 设置DataFrame的name属性，但不改变索引名称
                 df.name = pair
             
             self.logger.info(f"处理货币对: {pair}")
             
-            # 1. 创建基础特征
+            # 1. ICEEMDAN分解
+            close_values = df['Close'].values
+            imfs = self.ceemdan.ceemdan(close_values)
+            
+            # 添加IMF分量作为特征
+            for i, imf in enumerate(imfs):
+                df[f'IMF_{i}'] = imf
+            
+            # 计算趋势分量(最后一个IMF)
+            df['trend'] = imfs[-1]
+            
+            # 2. 基础价格特征
             df['returns'] = df['Close'].pct_change()
             df['volatility'] = df['returns'].rolling(window=20).std()
             
-            # 2. 处理基础特征的缺失值
-            df['returns'] = df['returns'].ffill().bfill()
-            df['volatility'] = df['volatility'].ffill().bfill()
-            
             # 3. 添加宏观经济特征
-            self.logger.info(f"开始添加宏观经济特征: {pair}")
             df = self._add_macro_features(df, pair)
-            self.logger.info(f"完成添加宏观经济特征")
             
-            # 4. 生成改进的交易信号
-            self.logger.info("开始生成多周期加权交易信号")
+            # 4. 技术指标
+            # 多周期移动平均
+            for window in [5, 10, 20, 50]:
+                df[f'MA{window}'] = df['Close'].rolling(window=window).mean()
+                df[f'MA_dist_{window}'] = (df['Close'] - df[f'MA{window}']) / df[f'MA{window}']
             
-            # 计算动量指标
-            df['momentum_5'] = df['Close'].pct_change(5)  # 5天动量
-            df['momentum_20'] = df['Close'].pct_change(20)  # 20天动量
+            # RSI指标
+            df['RSI'] = self.calculate_rsi(df['Close'], 14)
             
-            # 计算趋势指标
-            df['ma_20'] = df['Close'].rolling(window=20).mean()
-            df['trend'] = (df['Close'] - df['ma_20']) / df['ma_20']
+            # MACD指标
+            macd, signal, hist = self.calculate_macd(df['Close'])
+            df['MACD'] = macd
+            df['MACD_signal'] = signal
+            df['MACD_hist'] = hist
             
-            # 计算波动率和收益率指标
-            df['volatility'] = df['returns'].rolling(window=20).std()
-            df['returns_5'] = df['returns'].rolling(window=5).mean()  # 5日平均收益率
+            # 布林带
+            df['BB_middle'] = df['Close'].rolling(window=20).mean()
+            df['BB_upper'] = df['BB_middle'] + 2 * df['Close'].rolling(window=20).std()
+            df['BB_lower'] = df['BB_middle'] - 2 * df['Close'].rolling(window=20).std()
+            df['BB_width'] = (df['BB_upper'] - df['BB_lower']) / df['BB_middle']
+            df['BB_position'] = (df['Close'] - df['BB_lower']) / (df['BB_upper'] - df['BB_lower'])
+
+            # 5. 动量和波动率特征
+            for window in [5, 10, 20]:
+                df[f'momentum_{window}'] = df['Close'].pct_change(window)
+                df[f'volatility_{window}'] = df['returns'].rolling(window=window).std()
             
-            # 多头信号条件
-            long_conditions = (
-                (df['momentum_5'] > 0.001) &  # 提高短期动量阈值
-                (df['returns_5'] > 0.0003) &   # 提高近期收益要求
-                (
-                    (df['momentum_20'] > 0.0005) |   # 提高中期动量要求
-                    (df['trend'] > 0.002)            # 提高趋势要求
-                )
+            # 6. 填充缺失值
+            numeric_columns = df.select_dtypes(include=[np.number]).columns
+            for col in numeric_columns:
+                df[col] = df[col].interpolate(method='linear')
+                df[col] = df[col].fillna(method='ffill').fillna(method='bfill')
+            
+            # 7. 生成交易信号
+            df['signal'] = 0  # 默认持仓不变
+            
+            # 将条件分成不同类别，每类条件独立判断
+            # 1. 趋势类信号
+            trend_signals = {
+                'imf_trend': df['IMF_0'] > 0,  # 最高频IMF向上
+                'main_trend': df['trend'] > df['trend'].shift(1),  # 总体趋势向上
+                'ma_trend': df['Close'] > df['MA20'],  # 价格在中期均线上方
+            }
+            
+            # 2. 技术指标类信号
+            tech_signals = {
+                'rsi_ok': (df['RSI'] > 30) & (df['RSI'] < 80),  # RSI区间更宽松
+                'bb_ok': (df['BB_position'] > 0.1) & (df['BB_position'] < 0.9),  # 布林带位置更宽松
+                'macd_ok': df['MACD'] > df['MACD_signal']  # MACD信号
+            }
+            
+            # 3. 动量类信号
+            momentum_signals = {
+                'short_momentum': df['momentum_5'] > -0.01,  # 短期动量不太差
+                'mid_momentum': df['momentum_20'] > -0.02,  # 中期动量不太差
+                'vol_ok': df['volatility'] < df['volatility'].rolling(50).mean() * 1.5  # 波动率限制更宽松
+            }
+            
+            # 4. 宏观经济信号
+            macro_signals = {
+                'cpi_ok': True,
+                'gdp_ok': True
+            }
+            
+            if 'CPI_CPI_diff' in df.columns:
+                macro_signals['cpi_ok'] = abs(df['CPI_CPI_diff']) < df['CPI_CPI_diff'].std() * 2.5  # 更宽松的CPI限制
+            if 'REAL_GDP_REAL_GDP_diff' in df.columns:
+                macro_signals['gdp_ok'] = abs(df['REAL_GDP_REAL_GDP_diff']) < df['REAL_GDP_REAL_GDP_diff'].std() * 2.5
+            
+            # 计算每类信号的得分
+            df['trend_score'] = sum(trend_signals.values()).astype(int)
+            df['tech_score'] = sum(tech_signals.values()).astype(int)
+            df['momentum_score'] = sum(momentum_signals.values()).astype(int)
+            df['macro_score'] = sum(macro_signals.values()).astype(int)
+            
+            # 生成最终信号
+            # 多头条件：满足任意2个趋势信号，1个技术信号，1个动量信号
+            long_condition = (
+                (df['trend_score'] >= 2) & 
+                (df['tech_score'] >= 1) & 
+                (df['momentum_score'] >= 1) &
+                (df['macro_score'] >= 1)
             )
             
-            # 空头信号条件
-            short_conditions = (
-                (df['momentum_5'] < -0.001) &  # 提高短期动量阈值
-                (df['returns_5'] < -0.0003) &   # 提高近期收益要求
-                (
-                    (df['momentum_20'] < -0.0005) |  # 提高中期动量要求
-                    (df['trend'] < -0.002)           # 提高趋势要求
-                )
+            # 空头条件：满足任意2个反向信号
+            short_condition = (
+                (df['trend_score'] <= 1) & 
+                (df['tech_score'] <= 1) & 
+                (df['momentum_score'] <= 1) &
+                (df['macro_score'] >= 1)  # 宏观经济稳定
             )
             
-            # 使用 loc 进行赋值以避免警告
-            df.loc[long_conditions, 'signal'] = 1
-            df.loc[short_conditions, 'signal'] = -1
-            df.loc[~(long_conditions | short_conditions), 'signal'] = 0
+            # 生成信号
+            df.loc[long_condition, 'signal'] = 1
+            df.loc[short_condition, 'signal'] = -1
             
-            # 添加波动率过滤（适度过滤）
-            high_volatility = df['volatility'] > df['volatility'].rolling(window=50).mean() * 2
-            df.loc[high_volatility, 'signal'] = 0
+            # 8. 信号平滑和风险控制
+            # 最小持仓周期
+            min_holding_period = 3
+            for i in range(min_holding_period, len(df)):
+                if df['signal'].iloc[i] != 0 and df['signal'].iloc[i-min_holding_period:i].any():
+                    df.loc[df.index[i], 'signal'] = 0
             
-            # 添加止损条件
-            STOP_LOSS_THRESHOLD = 0.02  # 恢复到2%止损线
+            # 止损控制
+            stop_loss = 0.015  # 1.5%止损
             for i in range(1, len(df)):
                 if df['signal'].iloc[i-1] != 0:  # 如果前一天有持仓
                     returns = df['returns'].iloc[i]
-                    if abs(returns) > STOP_LOSS_THRESHOLD:  # 如果超过止损线
-                        df.loc[df.index[i], 'signal'] = 0
+                    if abs(returns) > stop_loss:  # 如果超过止损线
+                        df.loc[df.index[i], 'signal'] = 0  # 平仓
             
-            # 验证信号质量
-            signal_stats = self._validate_signals(df)
-            if signal_stats is None:
-                return None
-            
-            # 4. 添加动量特征
-            self.add_momentum_features(df)
-            
-            # 5. 添加技术指标
-            for window in [5, 10, 20, 50]:
-                df[f'MA{window}'] = df['Close'].rolling(window=window).mean()
-                df[f'trend_{window}'] = (df['Close'] - df[f'MA{window}']) / df[f'MA{window}']
-            
-            middle, upper, lower = self.calculate_bollinger_bands(df['Close'])
-            df['bb_width'] = (upper - lower) / middle
-            df['bb_pos'] = (df['Close'] - lower) / (upper - lower)
-            
-            # 6. 处理所有特征的缺失值
-            numeric_cols = df.select_dtypes(include=[np.float64, np.int64]).columns
-            for col in numeric_cols:
-                if col != 'signal':  # 排除信号列
-                    df[col] = df[col].ffill().bfill()  # 使用新的填充方法
-            
-            # 7. 输出信号统计
+            # 输出信号统计
             signal_dist = df['signal'].value_counts(normalize=True)
             self.logger.info("\n交易信号分布:")
             for signal in sorted(signal_dist.index):
                 self.logger.info(f"信号 {signal}: {signal_dist[signal]*100:.2f}%")
-            
-            self.logger.info("\n信号统计:")
-            self.logger.info(f"信号1的平均收益率: {df[df['signal'] == 1]['returns'].mean():.4f}")
-            self.logger.info(f"信号1的平均波动率: {df[df['signal'] == 1]['volatility'].mean():.4f}")
-            self.logger.info(f"信号-1的平均收益率: {df[df['signal'] == -1]['returns'].mean():.4f}")
-            self.logger.info(f"信号-1的平均波动率: {df[df['signal'] == -1]['volatility'].mean():.4f}")
-            
-            # 添加ICEEMDAN分解特征
-            df = self.add_iceemdan_features(df)
-            if df is None:
-                return None
-                
-            # 处理所有特征的缺失值
-            numeric_cols = df.select_dtypes(include=[np.float64, np.int64]).columns
-            for col in numeric_cols:
-                if col != 'signal':  # 排除信号列
-                    df[col] = df[col].ffill().bfill()
-            
-            # 处理无穷值和极端值
-            def clean_and_scale_features(df):
-                """清理特征，但不进行标准化"""
-                # 创建副本避免警告
-                df = df.copy()
-                
-                # 价格和信号特征列表
-                price_cols = ['Open', 'High', 'Low', 'Close']
-                essential_cols = price_cols + ['signal']
-                
-                # 处理非基础特征
-                for col in df.columns:
-                    if col not in essential_cols:
-                        # 替换无穷值为0
-                        df[col] = df[col].replace([np.inf, -np.inf], 0)
-                        
-                        # 使用前向填充处理缺失值
-                        df[col] = df[col].ffill
-                        # 使用后向填充处理剩余的缺失值
-                        df[col] = df[col].bfill
-                        # 如果仍有缺失值，用0填充
-                        df[col] = df[col].ffill(0).bfill(0)
-                        
-                        # 限制极端值范围(使用分位数)
-                        if df[col].std() != 0:  # 只处理非常数列
-                            q1 = df[col].quantile(0.01)
-                            q3 = df[col].quantile(0.99)
-                            df[col] = df[col].clip(lower=q1, upper=q3)
-                
-                return df
-                
-            # 修复pct_change警告
-            def calculate_changes(df):
-                for col in df.columns:
-                    if '_CHANGE' in col:
-                        # 先处理缺失值,再计算变化率
-                        series = df[col].ffill
-                        df[col] = series.pct_change(fill_method=None)
-                return df
-                
-            # 优化特征选择
-            def select_features(df):
-                # 定义必须保留的特征
-                essential_features = ['Close', 'signal']
-                
-                # 计算相关性矩阵
-                corr_matrix = df.corr().abs()
-                upper = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
-                
-                # 找出高度相关的特征对
-                high_corr_pairs = []
-                for col in upper.columns:
-                    highly_correlated = upper[col][upper[col] > 0.95].index.tolist()
-                    for corr_col in highly_correlated:
-                        if col not in essential_features and corr_col not in essential_features:
-                            high_corr_pairs.append((col, corr_col))
-                
-                # 从每对高度相关的特征中删除一个
-                to_drop = set()
-                for feat1, feat2 in high_corr_pairs:
-                    if feat1 not in essential_features and feat2 not in essential_features:
-                        # 保留名字较短的特征（通常是更基础的特征）
-                        if len(feat1) > len(feat2):
-                            to_drop.add(feat1)
-                        else:
-                            to_drop.add(feat2)
-                
-                # 删除选定的特征
-                return df.drop(columns=list(to_drop))
-                
-            # 应用处理函数
-            df = clean_and_scale_features(df)
-            df = calculate_changes(df)
-            df = select_features(df)
             
             return df
             
@@ -733,7 +678,7 @@ class FeatureEngineer:
             return None
 
     def _add_macro_features(self, df, pair):
-        """添加宏观经济特征，包括指标差异"""
+        """添加宏观经济特征"""
         try:
             # 获取货币对的两个国家代码
             country1, country2 = self._get_countries(pair)
@@ -762,37 +707,40 @@ class FeatureEngineer:
                 }
             }
             
-            macro_data = {country1: {}, country2: {}}
+            # 存储所有国家的宏观数据
+            macro_data = {}
             
-            # 加载并处理宏观数据
+            # 加载并处理每个国家的宏观数据
             for country in [country1, country2]:
+                macro_data[country] = {}
                 for indicator, config in indicators_config.items():
+                    # 加载数据
                     file_path = os.path.join(self.macro_dir, f'{country}_{indicator}.csv')
                     self.logger.info(f"尝试读取文件: {file_path}")
                     
                     if os.path.exists(file_path):
                         try:
-                            # 读取数据
-                            data = pd.read_csv(file_path, index_col='date', parse_dates=True)
-                            self.logger.info(f"成功读取{country}_{indicator}数据，形状: {data.shape}")
+                            # 读取数据并设置索引
+                            data = pd.read_csv(file_path)
+                            data['date'] = pd.to_datetime(data['date'])
+                            data.set_index('date', inplace=True)
                             
-                            # 只选择需要的列
-                            data = data[config['columns']]
+                            # 重新采样到日频数据
+                            data = data.resample('D').asfreq()
                             
-                            # 转换为数值类型并检查是否有效
+                            # 对每个列进行插值
                             for col in config['columns']:
-                                data[col] = pd.to_numeric(data[col], errors='coerce')
-                                non_null_count = data[col].count()
-                                self.logger.info(f"{country}_{indicator}_{col} 有效数据点数: {non_null_count}")
+                                if col in data.columns:
+                                    # 使用线性插值填充缺失值
+                                    data[col] = data[col].interpolate(method='linear')
+                                    # 使用前向填充处理剩余的缺失值
+                                    data[col] = data[col].fillna(method='ffill')
+                                    # 使用后向填充处理剩余的缺失值
+                                    data[col] = data[col].fillna(method='bfill')
                             
-                            # 进行插值处理
-                            data = self._interpolate_macro_data(data)
-                            if data is not None:
-                                macro_data[country][indicator] = data
-                                self.logger.info(f"成功处理 {country}_{indicator} 数据")
-                            else:
-                                self.logger.error(f"插值处理失败: {country}_{indicator}")
-                                
+                            macro_data[country][indicator] = data
+                            self.logger.info(f"成功处理 {country}_{indicator} 数据")
+                            
                         except Exception as e:
                             self.logger.error(f"处理{country}_{indicator}数据失败: {str(e)}")
                             continue
@@ -801,37 +749,36 @@ class FeatureEngineer:
             
             # 计算特征
             for indicator, config in indicators_config.items():
-                if indicator in macro_data[country1] and indicator in macro_data[country2]:
+                if (indicator in macro_data[country1] and 
+                    indicator in macro_data[country2]):
+                    
                     self.logger.info(f"开始计算 {indicator} 特征")
                     
                     for col in config['columns']:
                         try:
+                            # 获取两个国家的数据
                             data1 = macro_data[country1][indicator][col]
                             data2 = macro_data[country2][indicator][col]
                             
-                            # 生成特征
-                            features = {
-                                'diff': (data1 - data2, 0),  # (计算公式, 默认填充值)
-                            }
+                            # 将数据重新索引到交易数据的日期
+                            data1 = data1.reindex(df.index)
+                            data2 = data2.reindex(df.index)
                             
-                            # 为每个特征类型创建列
-                            for feat_type in config['features']:
-                                feat_name = f'{indicator}_{col}_{feat_type}'
-                                calc_formula, fill_value = features[feat_type]
-                                
-                                # 计算特征值
-                                df[feat_name] = calc_formula
-                                
-                                # 处理缺失值和异常值
-                                df[feat_name] = df[feat_name].replace([np.inf, -np.inf], np.nan)
-                                df[feat_name] = df[feat_name].ffill().bfill()
-                                df[feat_name] = df[feat_name].fillna(fill_value)
-                                
-                                # 处理异常值
-                                self.handle_outliers(df, [feat_name])
-                                
-                                self.logger.info(f"成功创建特征: {feat_name}")
-
+                            # 计算差值特征
+                            feat_name = f'{indicator}_{col}_diff'
+                            df[feat_name] = data1 - data2
+                            
+                            # 处理缺失值和异常值
+                            df[feat_name] = df[feat_name].replace([np.inf, -np.inf], np.nan)
+                            # 使用fillna方法替代ffill和bfill
+                            df[feat_name] = df[feat_name].fillna(method='ffill')
+                            df[feat_name] = df[feat_name].fillna(method='bfill')
+                            
+                            # 处理异常值
+                            self.handle_outliers(df, [feat_name])
+                            
+                            self.logger.info(f"成功创建特征: {feat_name}")
+                            
                         except Exception as e:
                             self.logger.error(f"计算{indicator}_{col}特征失败: {str(e)}")
                             continue
@@ -847,6 +794,167 @@ class FeatureEngineer:
         except Exception as e:
             self.logger.error(f"添加宏观经济特征失败: {str(e)}")
             return df
+
+    def generate_signals(self, df, pair):
+        """根据不同货币对生成差异化的交易信号"""
+        
+        if pair == 'CNYUSD':
+            # 1. 计算多个独立的微观信号
+            
+            # 1.1 基于价格变动的信号
+            df['price_signal'] = np.where(
+                df['Close'].diff() > 0, 1,
+                np.where(df['Close'].diff() < 0, -1, 0)
+            )
+            
+            # 1.2 基于高低点的信号
+            df['hl_signal'] = np.where(
+                df['High'] > df['High'].shift(1), 1,
+                np.where(df['Low'] < df['Low'].shift(1), -1, 0)
+            )
+            
+            # 1.3 基于开盘收盘价差的信号
+            df['oc_signal'] = np.where(
+                df['Close'] > df['Open'], 1,
+                np.where(df['Close'] < df['Open'], -1, 0)
+            )
+            
+            # 1.4 基于极短期动量的信号
+            df['mom_signal'] = np.where(
+                df['Close'].diff(2).rolling(3).mean() > 0, 1,
+                np.where(df['Close'].diff(2).rolling(3).mean() < 0, -1, 0)
+            )
+            
+            # 1.5 基于价格波动的信号
+            df['vol_signal'] = np.where(
+                (df['High'] - df['Low']) > (df['High'] - df['Low']).shift(1), 1,
+                np.where((df['High'] - df['Low']) < (df['High'] - df['Low']).shift(1), -1, 0)
+            )
+            
+            # 2. 计算信号权重
+            weights = {
+                'price_signal': 0.25,
+                'hl_signal': 0.2,
+                'oc_signal': 0.2,
+                'mom_signal': 0.2,
+                'vol_signal': 0.15
+            }
+            
+            # 3. 计算加权组合信号
+            df['weighted_signal'] = sum(df[signal] * weight for signal, weight in weights.items())
+            
+            # 4. 生成最终信号（超级激进版本）
+            signal_threshold = 0.1  # 极小的阈值
+            
+            # 4.1 基础信号
+            df['base_signal'] = np.where(
+                df['weighted_signal'] > signal_threshold, 1,
+                np.where(df['weighted_signal'] < -signal_threshold, -1, 0)
+            )
+            
+            # 4.2 信号增强
+            df['signal_count'] = (
+                (df['price_signal'] != 0).astype(int) +
+                (df['hl_signal'] != 0).astype(int) +
+                (df['oc_signal'] != 0).astype(int) +
+                (df['mom_signal'] != 0).astype(int) +
+                (df['vol_signal'] != 0).astype(int)
+            )
+            
+            # 4.3 最终信号生成（多重条件）
+            df['signal'] = 0
+            
+            # 多头条件：任意两个信号同向且加权信号为正
+            long_condition = (
+                (df['signal_count'] >= 2) &
+                (df['weighted_signal'] > 0) &
+                ((df['price_signal'] == 1) | (df['hl_signal'] == 1) | 
+                 (df['oc_signal'] == 1) | (df['mom_signal'] == 1) | 
+                 (df['vol_signal'] == 1))
+            )
+            
+            # 空头条件：任意两个信号同向且加权信号为负
+            short_condition = (
+                (df['signal_count'] >= 2) &
+                (df['weighted_signal'] < 0) &
+                ((df['price_signal'] == -1) | (df['hl_signal'] == -1) | 
+                 (df['oc_signal'] == -1) | (df['mom_signal'] == -1) | 
+                 (df['vol_signal'] == -1))
+            )
+            
+            # 5. 应用信号
+            df.loc[long_condition, 'signal'] = 1
+            df.loc[short_condition, 'signal'] = -1
+            
+            # 6. 信号平滑（可选，但建议保留以减少噪音）
+            df['signal'] = df['signal'].rolling(window=2, min_periods=1).mean()
+            df['signal'] = np.where(df['signal'] > 0.2, 1,
+                                   np.where(df['signal'] < -0.2, -1, 0))
+            
+            # 7. 清理临时列
+            columns_to_drop = [
+                'price_signal', 'hl_signal', 'oc_signal', 'mom_signal',
+                'vol_signal', 'weighted_signal', 'base_signal',
+                'signal_count'
+            ]
+            df.drop(columns=columns_to_drop, inplace=True)
+            
+        else:
+            # 其他货币对保持原有的信号生成逻辑
+            trend_signals = {
+                'imf_trend': df['IMF_0'] > 0,  # 最高频IMF向上
+                'main_trend': df['trend'] > df['trend'].shift(1),  # 总体趋势向上
+                'ma_trend': df['Close'] > df['MA20'],  # 价格在中期均线上方
+            }
+            
+            tech_signals = {
+                'rsi_ok': (df['RSI'] > 30) & (df['RSI'] < 80),  # RSI区间更宽松
+                'bb_ok': (df['BB_position'] > 0.1) & (df['BB_position'] < 0.9),  # 布林带位置更宽松
+                'macd_ok': df['MACD'] > df['MACD_signal']  # MACD信号
+            }
+            
+            momentum_signals = {
+                'short_momentum': df['momentum_5'] > -0.01,  # 短期动量不太差
+                'mid_momentum': df['momentum_20'] > -0.02,  # 中期动量不太差
+                'vol_ok': df['volatility'] < df['volatility'].rolling(50).mean() * 1.5  # 波动率限制更宽松
+            }
+            
+            macro_signals = {
+                'cpi_ok': abs(df['CPI_CPI_diff']) < df['CPI_CPI_diff'].std() * 2.5,
+                'gdp_ok': abs(df['REAL_GDP_REAL_GDP_diff']) < df['REAL_GDP_REAL_GDP_diff'].std() * 2.5
+            }
+            
+            # 计算各类信号得分
+            df['trend_score'] = sum(trend_signals.values())
+            df['tech_score'] = sum(tech_signals.values())
+            df['momentum_score'] = sum(momentum_signals.values())
+            df['macro_score'] = sum(macro_signals.values())
+            
+            # 常规交易条件
+            long_condition = (
+                (df['trend_score'] >= 2) &  # 需要2个趋势信号
+                (df['tech_score'] >= 1) &   # 需要1个技术信号
+                (df['momentum_score'] >= 1) & # 需要1个动量信号
+                (df['macro_score'] >= 1)    # 需要1个宏观指标支持
+            )
+            
+            short_condition = (
+                (df['trend_score'] <= 1) & 
+                (df['tech_score'] <= 1) &
+                (df['momentum_score'] <= 1)
+            )
+        
+        # 生成信号
+        df.loc[long_condition, 'signal'] = 1
+        df.loc[short_condition, 'signal'] = -1
+        df.loc[~(long_condition | short_condition), 'signal'] = 0
+        
+        # 信号平滑处理（避免频繁交易）
+        df['signal'] = df['signal'].rolling(window=3, min_periods=1).mean()
+        df['signal'] = np.where(df['signal'] > 0.5, 1, 
+                               np.where(df['signal'] < -0.5, -1, 0))
+        
+        return df
 
 def main():
     """主函数"""

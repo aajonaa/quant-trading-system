@@ -562,7 +562,7 @@ class HybridForexModel:
             df.set_index('Date', inplace=True)
 
             # 记录特征数量（用于创建深度学习模型）
-            self.n_features = len(df.columns) - 1  # 'Signal'
+            self.n_features = len(df.columns) - 1  # 'signal'
 
             self.logger.info(f"成功加载数据，形状: {df.shape}")
             return df
@@ -945,34 +945,6 @@ class SignalAnalyzer:
         except Exception as e:
             self.logger.error(f"加载数据失败: {str(e)}")
             return None
-
-    def prepare_features(self, df):
-        """准备特征和标签"""
-        try:
-            # 获取所有列名
-            all_columns = df.columns.tolist()
-
-            # 定义要排除的列
-            exclude_cols = ['signal']
-
-            # 获取特征列（排除价格列和标签列）
-            feature_cols = [col for col in all_columns if col not in exclude_cols]
-            features = df[feature_cols]
-
-            # 确保所有特征都是数值型
-            features = features.select_dtypes(include=[np.float64, np.int64])
-
-            # 获取标签
-            labels = df['signal']
-
-            # 输出特征信息
-            self.logger.info(f"\n使用的特征数量: {len(features.columns)}")
-
-            return features, labels
-
-        except Exception as e:
-            self.logger.error(f"准备特征失败: {str(e)}")
-            return None, None
 
     def analyze_signals(self, df):
         """分析原始信号和特征的关系"""
