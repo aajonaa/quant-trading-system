@@ -95,10 +95,10 @@ class FeatureEngineer:
             df['returns'] = df['returns'].fillna(0)
             df['volatility'] = df['volatility'].ffill().bfill()
             
-            # # 3. 添加宏观经济特征
-            # self.logger.info(f"开始添加宏观经济特征: {pair}")
-            # df = self._add_macro_features(df, pair)
-            # self.logger.info(f"完成添加宏观经济特征")
+            # 3. 添加宏观经济特征
+            self.logger.info(f"开始添加宏观经济特征: {pair}")
+            df = self._add_macro_features(df, pair)
+            self.logger.info(f"完成添加宏观经济特征")
             
             # 4. 生成改进的交易信号
             self.logger.info("开始生成多周期加权交易信号")

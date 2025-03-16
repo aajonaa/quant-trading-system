@@ -64,14 +64,14 @@ class HybridForexModel:
             self.logger.error(f"创建基础模型失败: {str(e)}")
             return False
 
-    def _create_kelm_model(self, hidden_units=1000, gamma=0.1, C=1.0):
+    def _create_kelm_model(self, hidden_units=100, gamma=0.1, C=1.0):
         """创建KELM模型"""
         try:
             class KELMClassifier:
-                def __init__(self, hidden_units=1000, gamma=0.1, C=1.0):
-                    self.hidden_units = hidden_units
-                    self.gamma = gamma
-                    self.C = C
+                def __init__(self, hidden_units=100, gamma=0.1, C=1.0):
+                    self.hidden_units = int(hidden_units)  # 确保是整数
+                    self.gamma = float(gamma)
+                    self.C = float(C)
                     self.random_state = 42
                     self.weights = None
                     self.bias = None
@@ -104,6 +104,9 @@ class HybridForexModel:
                     self.X_train = np.array(X, dtype=np.float64)
                     n_samples, n_features = X.shape
 
+                    # 将标签转换为整数类型
+                    y = np.array(y, dtype=np.int32)  # 修改这里
+
                     # 随机生成输入权重和偏置
                     rng = np.random.RandomState(self.random_state)
                     self.weights = rng.normal(size=(n_features, self.hidden_units))
@@ -132,7 +135,7 @@ class HybridForexModel:
                     # 预测
                     y_pred = H @ self.beta
                     # 返回类别标签
-                    return np.argmax(y_pred, axis=1) - 1
+                    return np.argmax(y_pred, axis=1) - 1  # 确保返回-1,0,1
 
                 def _kernel_matrix(self, X1, X2):
                     """计算RBF核矩阵"""
@@ -154,12 +157,17 @@ class HybridForexModel:
                     if y is None:
                         raise ValueError("输入标签不能为空")
 
-                    y = np.array(y)
-                    n_classes = len(np.unique(y))
+                    y = np.array(y, dtype=np.int32)  # 修改这里
+                    n_classes = 3  # 固定为3类：-1,0,1
                     n_samples = len(y)
                     one_hot = np.zeros((n_samples, n_classes))
-                    one_hot[np.arange(n_samples), y + 1] = 1
+                    one_hot[np.arange(n_samples), y + 1] = 1  # +1使-1,0,1映射到0,1,2
                     return one_hot
+
+                def score(self, X, y):
+                    """计算准确率分数"""
+                    y_pred = self.predict(X)
+                    return np.mean(y_pred == y)
 
             return KELMClassifier(hidden_units=hidden_units, gamma=gamma, C=C)
 
@@ -1388,7 +1396,7 @@ def main():
         results_df = pd.DataFrame({
             'Date': df.index,
             'Close': df['Close'],
-            'True_Signal': df['reSignal'],
+            'True_Signal': df['signal'],
             'Ensemble_Signal': ensemble_full_pred  # 只保留集成信号
         })
 

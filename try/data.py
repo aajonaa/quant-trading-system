@@ -5,7 +5,7 @@ import time
 from datetime import datetime
 
 # Alpha Vantage API密钥
-ALPHA_VANTAGE_API_KEY = "ELWWYU1314CR68AL"
+ALPHA_VANTAGE_API_KEY = "PB3M8GJ0AYCI8A41"
 
 class ForexDataManager:
     def __init__(self, data_dir=r"..\try\data"):
