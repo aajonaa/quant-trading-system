@@ -6,7 +6,6 @@ from PyEMD import CEEMDAN
 import os
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
-from sklearn.linear_model import LinearRegression
 
 class FeatureEngineer:
     def __init__(self):
@@ -559,7 +558,7 @@ class FeatureEngineer:
     def process_all_pairs(self):
         """处理所有货币对"""
         try:
-            pairs = ["CNYEUR", "CNYGBP", "CNYJPY", "CNYUSD"]
+            pairs = ["CNYAUD","CNYEUR", "CNYGBP", "CNYJPY", "CNYUSD"]
             
             for pair in pairs:
                 self.logger.info(f"处理 {pair}...")
@@ -681,11 +680,41 @@ class FeatureEngineer:
                 df[col] = df[col].clip(mean - n_std*std, mean + n_std*std)
         return df
 
+    def _get_countries(self, pair):
+        """从货币对获取对应的国家代码"""
+        # 货币到国家的映射
+        currency_map = {
+            'CNY': 'CN',
+            'EUR': 'EU', 
+            'GBP': 'UK',
+            'USD': 'US',
+            'JPY': 'JP',
+            'AUD': 'AU'  # 添加澳元的映射
+        }
+        
+        # 获取基础货币和报价货币的国家代码
+        base_currency = pair[:3]
+        quote_currency = pair[3:]
+        
+        base_country = currency_map.get(base_currency)
+        quote_country = currency_map.get(quote_currency)
+        
+        if not base_country or not quote_country:
+            self.logger.error(f"无法映射货币对 {pair} 到对应国家")
+            return None, None
+        
+        return base_country, quote_country
+
     def _interpolate_macro_data(self, data):
         """对宏观数据进行线性插值处理"""
         try:
             # 确保数据是按日期排序的
             data = data.sort_index()
+            
+            # 将数据转换为数值类型
+            numeric_cols = data.select_dtypes(include=['object']).columns
+            for col in numeric_cols:
+                data[col] = pd.to_numeric(data[col], errors='coerce')
             
             # 创建完整的日期范围
             date_range = pd.date_range(start=data.index.min(), end=data.index.max(), freq='D')
@@ -695,7 +724,7 @@ class FeatureEngineer:
             data_interpolated = data_reindexed.interpolate(method='linear')
             
             # 处理首尾的缺失值
-            data_interpolated = data_interpolated.fillna(method='ffill').fillna(method='bfill')
+            data_interpolated = data_interpolated.ffill().bfill()
             
             return data_interpolated
             
@@ -706,121 +735,78 @@ class FeatureEngineer:
     def _add_macro_features(self, df, pair):
         """添加宏观经济特征，包括指标差异、比率和价差"""
         try:
-            # 货币到国家的映射
-            currency_map = {
-                'CNY': 'CN',
-                'EUR': 'EU',
-                'GBP': 'UK',
-                'USD': 'US',
-                'JPY': 'JP'
-            }
-            
-            # 获取基础货币和报价货币的国家代码
-            base_country = currency_map.get(pair[:3])
-            quote_country = currency_map.get(pair[3:])
-            
-            if not base_country or not quote_country:
-                self.logger.error(f"无法映射货币对 {pair} 到对应国家")
+            # 获取货币对的两个国家代码
+            country1, country2 = self._get_countries(pair)
+            if not country1 or not country2:
                 return df
             
-            # 定义宏观指标映射
-            indicator_map = {
-                'CPI': {
-                    'file': 'CPI',
-                    'desc': '消费者价格指数',
-                    'unit': '指数值'
-                },
-                'INFLATION': {
-                    'file': 'INFLATION',
-                    'desc': '通货膨胀率',
-                    'unit': '百分比'
-                },
-                'REAL_GDP': {
-                    'file': 'REAL_GDP',
-                    'desc': '实际GDP',
-                    'unit': '真实值'
-                },
-                'UNEMPLOYMENT': {
-                    'file': 'UNEMPLOYMENT',
-                    'desc': '失业率',
-                    'unit': '百分比'
-                }
+            # 定义宏观指标及其对应的列名
+            macro_indicators = {
+                'CPI': ['CPI', 'CPI_YOY'],
+                'INFLATION': ['INFLATION', 'INFLATION_YOY'],
+                'REAL_GDP': ['REAL_GDP'],
+                'UNEMPLOYMENT': ['UNEMPLOYMENT']
             }
             
-            # 存储所有宏观数据
             macro_data = {}
             
-            # 加载两个国家的所有指标数据
-            for country in [base_country, quote_country]:
-                for ind_name, ind_info in indicator_map.items():
-                    file_path = self.macro_dir / f"{country}_{ind_info['file']}.csv"
-                    if file_path.exists():
-                        try:
-                            # 读取数据
-                            data = pd.read_csv(file_path)
-                            data['Date'] = pd.to_datetime(data['date'])
-                            data.set_index('Date', inplace=True)
-                            
-                            # 使用线性插值填充日度数据
-                            filled_data = self._interpolate_macro_data(data)
-                            if filled_data is not None:
-                                macro_data[f"{country}_{ind_name}"] = filled_data
-                                
-                        except Exception as e:
-                            self.logger.error(f"处理{country}的{ind_name}数据失败: {str(e)}")
-                            continue
+            # 加载并处理宏观数据
+            for country in [country1, country2]:
+                country_data = {}
+                for indicator, columns in macro_indicators.items():
+                    file_path = os.path.join(self.macro_dir, f'{country}_{indicator}.csv')
+                    if os.path.exists(file_path):
+                        data = pd.read_csv(file_path, index_col='date', parse_dates=True)
+                        # 确保只处理指定的列
+                        data = data[columns]
+                        # 转换为数值类型
+                        for col in columns:
+                            data[col] = pd.to_numeric(data[col], errors='coerce')
+                        # 进行插值处理    
+                        data = self._interpolate_macro_data(data)
+                        if data is not None:
+                            country_data[indicator] = data
+                macro_data[country] = country_data
             
-            # 计算指标差异特征
-            for ind_name in indicator_map.keys():
-                base_key = f"{base_country}_{ind_name}"
-                quote_key = f"{quote_country}_{ind_name}"
-                
-                if base_key in macro_data and quote_key in macro_data:
-                    try:
-                        # 对齐数据到交易日期
-                        base_aligned = macro_data[base_key].reindex(df.index).ffill().bfill()
-                        quote_aligned = macro_data[quote_key].reindex(df.index).ffill().bfill()
+            # 计算每个指标的特征
+            for indicator, columns in macro_indicators.items():
+                if indicator in macro_data[country1] and indicator in macro_data[country2]:
+                    for col in columns:
+                        # 差异特征
+                        diff_col = f'{indicator}_{col}_diff'
+                        df[diff_col] = macro_data[country1][indicator][col] - \
+                                     macro_data[country2][indicator][col]
+                        df[diff_col] = df[diff_col].ffill().bfill()
                         
-                        # 计算三种差异指标
-                        df[f'MACRO_{ind_name}_DIFF'] = base_aligned - quote_aligned
-                        df[f'MACRO_{ind_name}_RATIO'] = base_aligned / quote_aligned
-                        df[f'MACRO_{ind_name}_SPREAD'] = (base_aligned - quote_aligned) / quote_aligned
+                        # 比率特征
+                        ratio_col = f'{indicator}_{col}_ratio'
+                        df[ratio_col] = macro_data[country1][indicator][col] / \
+                                      macro_data[country2][indicator][col]
+                        df[ratio_col] = df[ratio_col].ffill().bfill()
                         
-                        # 添加滚动变化率
-                        for window in [5, 20]:
-                            diff_col = f'MACRO_{ind_name}_DIFF'
-                            df[f'{diff_col}_CHANGE_{window}D'] = df[diff_col].pct_change(window)
-                            
-                    except Exception as e:
-                        self.logger.error(f"计算{ind_name}差异指标失败: {str(e)}")
-                        continue
-            
-            # 处理异常值和缺失值
-            macro_cols = [col for col in df.columns if col.startswith('MACRO_')]
-            for col in macro_cols:
-                # 处理无穷值
-                df[col] = df[col].replace([np.inf, -np.inf], np.nan)
-                
-                # 使用前向填充处理缺失值
-                df[col] = df[col].ffill()
-                df[col] = df[col].bfill()
-                df[col] = df[col].fillna(0)
-                
-                # 处理极端值
-                if df[col].std() != 0:
-                    q1 = df[col].quantile(0.01)
-                    q3 = df[col].quantile(0.99)
-                    df[col] = df[col].clip(lower=q1, upper=q3)
-            
-            # 记录添加的特征信息
-            self.logger.info(f"\n为{pair}添加的宏观经济特征:")
-            for ind_name in indicator_map.keys():
-                feature_cols = [col for col in df.columns if f'MACRO_{ind_name}' in col]
-                if feature_cols:
-                    self.logger.info(f"\n{indicator_map[ind_name]['desc']}相关特征:")
-                    for col in feature_cols:
-                        self.logger.info(f"- {col}")
-                    
+                        # 价差特征
+                        spread_col = f'{indicator}_{col}_spread'
+                        df[spread_col] = (macro_data[country1][indicator][col] - \
+                                        macro_data[country2][indicator][col]) / \
+                                       macro_data[country2][indicator][col]
+                        df[spread_col] = df[spread_col].ffill().bfill()
+                        
+                        # 处理无穷大和NaN值
+                        df[diff_col] = df[diff_col].replace([np.inf, -np.inf], np.nan).fillna(0)
+                        df[ratio_col] = df[ratio_col].replace([np.inf, -np.inf], np.nan).fillna(1)
+                        df[spread_col] = df[spread_col].replace([np.inf, -np.inf], np.nan).fillna(0)
+                        
+                        # 处理异常值
+                        self.handle_outliers(df, [diff_col, ratio_col, spread_col])
+                        
+                        # 添加滞后特征
+                        lag_periods = [1, 3, 6, 12]
+                        for lag in lag_periods:
+                            for feature_col in [diff_col, ratio_col, spread_col]:
+                                lag_col = f'{feature_col}_lag_{lag}'
+                                df[lag_col] = df[feature_col].shift(lag)
+                                df[lag_col] = df[lag_col].ffill().bfill()
+
             return df
             
         except Exception as e:
