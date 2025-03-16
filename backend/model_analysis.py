@@ -554,7 +554,7 @@ class HybridForexModel:
             df.set_index('Date', inplace=True)
 
             # 记录特征数量（用于创建深度学习模型）
-            self.n_features = len(df.columns) - 3  # 排除 'returns', 'log_returns', 'reSignal'
+            self.n_features = len(df.columns) - 1  # 'Signal'
 
             self.logger.info(f"成功加载数据，形状: {df.shape}")
             return df
@@ -571,8 +571,7 @@ class HybridForexModel:
 
             # 定义要排除的列
             exclude_cols = [
-                'reSignal',
-                'returns', 'log_returns'  # 添加这两个要排除的特征
+                'signal',
             ]
 
             # 获取特征列（排除价格列、标签列和收益率特征）
@@ -587,7 +586,7 @@ class HybridForexModel:
             features = features.fillna(method='ffill').fillna(method='bfill')
 
             # 获取标签
-            labels = df['reSignal']
+            labels = df['signal']
 
             # 输出特征信息
             self.logger.info(f"\n使用的特征数量: {len(features.columns)}")
@@ -599,27 +598,149 @@ class HybridForexModel:
             return None, None
 
     def _format_classification_report(self, y_true, y_pred):
-        """格式化分类报告输出"""
-        report = classification_report(y_true, y_pred, output_dict=True)
+        """格式化分类报告，添加加权收益率评估"""
+        try:
+            # 基础分类报告
+            basic_report = classification_report(y_true, y_pred)
+            
+            # 计算加权收益率评估
+            weighted_returns = {
+                'short': self.data['return_short'],
+                'medium': self.data['return_medium'],
+                'long': self.data['return_long']
+            }
+            
+            weights = {
+                'short': 0.5,
+                'medium': 0.3,
+                'long': 0.2
+            }
+            
+            # 计算每种信号的加权收益
+            signal_returns = {}
+            for signal in [-1, 0, 1]:
+                mask = y_pred == signal
+                if mask.any():
+                    weighted_return = sum(
+                        weights[period] * weighted_returns[period][mask].mean()
+                        for period in weights.keys()
+                    )
+                    signal_returns[signal] = weighted_return
+            
+            # 添加加权收益率评估到报告
+            additional_metrics = "\n\n加权收益率评估:"
+            for signal, ret in signal_returns.items():
+                additional_metrics += f"\n信号 {signal}: {ret:.4f}"
+            
+            # 计算整体加权收益率
+            total_weighted_return = sum(
+                weights[period] * weighted_returns[period].mean()
+                for period in weights.keys()
+            )
+            additional_metrics += f"\n整体加权收益率: {total_weighted_return:.4f}"
+            
+            return basic_report + additional_metrics
+            
+        except Exception as e:
+            self.logger.error(f"格式化分类报告时发生错误: {str(e)}")
+            return None
 
-        # 构建格式化字符串
-        lines = []
-        lines.append("\n              precision    recall  f1-score   support")
-        lines.append("")
+    def evaluate_model(self, model, X_test, y_test, model_name):
+        """评估模型性能，包括多周期收益率评估"""
+        try:
+            # 获取预测结果
+            if hasattr(model, 'predict_proba'):
+                y_pred_proba = model.predict_proba(X_test)
+                y_pred = np.argmax(y_pred_proba, axis=1) - 1
+            else:
+                y_pred = model.predict(X_test)
+                if len(y_pred.shape) > 1:
+                    y_pred = np.argmax(y_pred, axis=1) - 1
+            
+            # 基础评估指标
+            accuracy = np.mean(y_pred == y_test)
+            
+            # 计算各期收益率的预测准确性
+            returns_evaluation = {}
+            for period in ['short', 'medium', 'long']:
+                returns = self.data[f'return_{period}'].iloc[len(self.data)-len(y_test):]
+                
+                # 计算方向预测准确率
+                correct_direction = np.sum(
+                    (y_pred > 0) & (returns > 0) |
+                    (y_pred < 0) & (returns < 0) |
+                    (y_pred == 0) & (np.abs(returns) < 0.001)
+                )
+                direction_accuracy = correct_direction / len(y_test)
+                
+                # 计算平均收益率
+                avg_return = np.mean([
+                    returns[i] for i in range(len(y_test))
+                    if y_pred[i] * returns[i] > 0
+                ])
+                
+                returns_evaluation[period] = {
+                    'direction_accuracy': direction_accuracy,
+                    'avg_return': avg_return
+                }
+            
+            # 输出评估结果
+            self.logger.info(f"\n=== {model_name} 模型评估 ===")
+            self.logger.info(f"整体准确率: {accuracy:.4f}")
+            
+            for period, metrics in returns_evaluation.items():
+                self.logger.info(f"\n{period}期评估:")
+                self.logger.info(f"方向准确率: {metrics['direction_accuracy']:.4f}")
+                self.logger.info(f"平均收益率: {metrics['avg_return']:.4f}")
+            
+            # 计算加权综合评分
+            weights = {'short': 0.5, 'medium': 0.3, 'long': 0.2}
+            weighted_score = sum(
+                weights[period] * metrics['direction_accuracy']
+                for period, metrics in returns_evaluation.items()
+            )
+            
+            self.logger.info(f"\n加权综合评分: {weighted_score:.4f}")
+            
+            return {
+                'accuracy': accuracy,
+                'returns_evaluation': returns_evaluation,
+                'weighted_score': weighted_score
+            }
+            
+        except Exception as e:
+            self.logger.error(f"评估模型时发生错误: {str(e)}")
+            return None
 
-        # 添加每个类别的指标
-        for label in sorted(list(set(y_true))):
-            metrics = report[str(label)]
-            line = f"{label:>8}       {metrics['precision']:8.2f} {metrics['recall']:8.2f} {metrics['f1-score']:8.2f} {int(metrics['support']):8d}"
-            lines.append(line)
-
-        lines.append("")
-        # 添加平均指标
-        avg_metrics = report['weighted avg']
-        lines.append(
-            f"weighted avg   {avg_metrics['precision']:8.2f} {avg_metrics['recall']:8.2f} {avg_metrics['f1-score']:8.2f} {int(avg_metrics['support']):8d}")
-
-        return "\n".join(lines)
+    def _create_ensemble_model(self, base_predictions, y_train):
+        """创建集成模型，考虑多周期预测"""
+        try:
+            # 将基础模型的预测转换为特征
+            ensemble_features = np.column_stack(base_predictions)
+            
+            # 添加多周期收益率信息
+            returns_features = np.column_stack([
+                self.data['return_short'].iloc[len(self.data)-len(y_train):],
+                self.data['return_medium'].iloc[len(self.data)-len(y_train):],
+                self.data['return_long'].iloc[len(self.data)-len(y_train):]
+            ])
+            
+            # 合并所有特征
+            X_ensemble = np.column_stack([ensemble_features, returns_features])
+            
+            # 创建和训练集成模型
+            ensemble = LogisticRegression(
+                multi_class='ovr',
+                class_weight='balanced',
+                max_iter=1000
+            )
+            ensemble.fit(X_ensemble, y_train)
+            
+            return ensemble, X_ensemble
+            
+        except Exception as e:
+            self.logger.error(f"创建集成模型时发生错误: {str(e)}")
+            return None, None
 
     def _pso_optimize(self, model_name, X_train, y_train, X_val, y_val):
         """使用PSO优化模型超参数"""
@@ -767,14 +888,14 @@ class HybridForexModel:
 
             # 创建PSO优化器
             pso = ParticleSwarmOptimizer(
-                n_particles=2,
+                n_particles=1,
                 param_bounds=param_bounds[model_name],
                 model_creator=self._get_model_creator(model_name),
                 is_dl=is_dl
             )
 
             # 运行优化
-            best_params, best_score = pso.optimize(X_train, y_train, X_val, y_val, n_iterations=2)
+            best_params, best_score = pso.optimize(X_train, y_train, X_val, y_val, n_iterations=1)
 
             self.logger.info(f"\nPSO优化结果 ({model_name}):")
             self.logger.info(f"最佳参数: {best_params}")
@@ -824,7 +945,7 @@ class SignalAnalyzer:
             all_columns = df.columns.tolist()
 
             # 定义要排除的列
-            exclude_cols = ['Open', 'High', 'Low', 'Close', 'reSignal']
+            exclude_cols = ['signal']
 
             # 获取特征列（排除价格列和标签列）
             feature_cols = [col for col in all_columns if col not in exclude_cols]
@@ -834,7 +955,7 @@ class SignalAnalyzer:
             features = features.select_dtypes(include=[np.float64, np.int64])
 
             # 获取标签
-            labels = df['reSignal']
+            labels = df['signal']
 
             # 输出特征信息
             self.logger.info(f"\n使用的特征数量: {len(features.columns)}")
@@ -893,7 +1014,7 @@ class SignalAnalyzer:
             predicted_signals[returns.shift(-1) < -threshold] = -1
 
             # 获取真实信号
-            true_signals = df['reSignal']
+            true_signals = df['signal']
 
             # 计算准确率
             accuracy = (predicted_signals == true_signals).mean()
@@ -1120,7 +1241,7 @@ def main():
                 # 使用回调函数训练模型
                 history = dl_model.fit(
                     X_train_reshaped, y_train_cat,
-                    epochs=200,           # 增加最大轮数
+                    epochs=100,           # 增加最大轮数
                     batch_size=32,
                     validation_split=0.2,
                     callbacks=callbacks,
