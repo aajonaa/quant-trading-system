@@ -681,6 +681,28 @@ class FeatureEngineer:
                 df[col] = df[col].clip(mean - n_std*std, mean + n_std*std)
         return df
 
+    def _interpolate_macro_data(self, data):
+        """对宏观数据进行线性插值处理"""
+        try:
+            # 确保数据是按日期排序的
+            data = data.sort_index()
+            
+            # 创建完整的日期范围
+            date_range = pd.date_range(start=data.index.min(), end=data.index.max(), freq='D')
+            
+            # 重新索引并进行线性插值
+            data_reindexed = data.reindex(date_range)
+            data_interpolated = data_reindexed.interpolate(method='linear')
+            
+            # 处理首尾的缺失值
+            data_interpolated = data_interpolated.fillna(method='ffill').fillna(method='bfill')
+            
+            return data_interpolated
+            
+        except Exception as e:
+            self.logger.error(f"线性插值处理失败: {str(e)}")
+            return None
+
     def _add_macro_features(self, df, pair):
         """添加宏观经济特征，包括指标差异、比率和价差"""
         try:
@@ -780,8 +802,8 @@ class FeatureEngineer:
                 df[col] = df[col].replace([np.inf, -np.inf], np.nan)
                 
                 # 使用前向填充处理缺失值
-                df[col] = df[col].fillna(method='ffill')
-                df[col] = df[col].fillna(method='bfill')
+                df[col] = df[col].ffill()
+                df[col] = df[col].bfill()
                 df[col] = df[col].fillna(0)
                 
                 # 处理极端值
