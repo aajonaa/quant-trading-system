@@ -406,6 +406,11 @@ class FeatureEngineer:
             # 获取数值列名
             value_col = data.select_dtypes(include=['float64', 'int64']).columns[0]
             
+            # 检查数据是否为常数
+            if data[value_col].std() == 0:
+                self.logger.warning(f"数据为常数值: {value_col} = {data[value_col].iloc[0]}")
+                return pd.Series(data[value_col].iloc[0], index=date_range)
+            
             # 创建包含所有日期的DataFrame
             daily_data = pd.DataFrame(index=date_range)
             daily_data['time_idx'] = (daily_data.index - daily_data.index[0]).days
@@ -415,13 +420,17 @@ class FeatureEngineer:
             daily_data.loc[data.index, value_col] = data[value_col]
             
             # 对每个非空区间进行线性回归
-            filled_data = pd.Series(index=daily_data.index)
             non_null_dates = daily_data[daily_data[value_col].notna()].index
             
             if len(non_null_dates) >= 2:
                 # 将日期转换为时间戳以进行回归
                 X = daily_data.loc[non_null_dates, 'time_idx'].values.reshape(-1, 1)
                 y = daily_data.loc[non_null_dates, value_col].values
+                
+                # 添加日志输出
+                self.logger.debug(f"回归数据点数量: {len(non_null_dates)}")
+                self.logger.debug(f"X范围: {X.min()} - {X.max()}")
+                self.logger.debug(f"y范围: {y.min()} - {y.max()}")
                 
                 # 训练回归模型
                 reg = LinearRegression()
@@ -437,9 +446,16 @@ class FeatureEngineer:
                 # 保持原始数据点不变
                 filled_data[non_null_dates] = daily_data.loc[non_null_dates, value_col]
                 
+                # 检查插值结果
+                if filled_data.std() == 0:
+                    self.logger.warning(f"插值结果为常数: {value_col}")
+                else:
+                    self.logger.debug(f"插值结果范围: {filled_data.min()} - {filled_data.max()}")
+                
                 return filled_data
-            
-            return None
+            else:
+                self.logger.warning(f"数据点不足以进行回归: {len(non_null_dates)} 个点")
+                return None
             
         except Exception as e:
             self.logger.error(f"宏观数据插值失败: {str(e)}")
@@ -457,8 +473,8 @@ class FeatureEngineer:
                 'JPY': 'JP'
             }
             
-            base_country = currency_map.get(pair[:3], pair[:3])  # 例如 CNY -> CH
-            quote_country = currency_map.get(pair[3:], pair[3:]) # 例如 USD -> US
+            base_country = currency_map.get(pair[:3], pair[:3])
+            quote_country = currency_map.get(pair[3:], pair[3:])
             
             # 检查宏观数据目录是否存在
             if not self.macro_dir.exists():
@@ -475,7 +491,6 @@ class FeatureEngineer:
             }
             
             # 加载宏观数据
-            macro_data = {}
             for ind_name, ind_info in indicators.items():
                 try:
                     # 加载基础货币国家数据
@@ -496,22 +511,28 @@ class FeatureEngineer:
                         self.logger.error(f"数据文件缺少date列: {base_file}")
                         continue
                         
-                    # 转换日期格式
+                    # 转换日期格式并设置索引
                     base_data[date_col] = pd.to_datetime(base_data[date_col])
                     quote_data[date_col] = pd.to_datetime(quote_data[date_col])
-                    
-                    # 设置索引
                     base_data.set_index(date_col, inplace=True)
                     quote_data.set_index(date_col, inplace=True)
                     
-                    # 对齐数据
-                    aligned_base = base_data.reindex(df.index).ffill()
-                    aligned_quote = quote_data.reindex(df.index).ffill()
+                    # 对基础货币和报价货币数据进行插值
+                    base_interpolated = self._interpolate_macro_data(base_data)
+                    quote_interpolated = self._interpolate_macro_data(quote_data)
+                    
+                    if base_interpolated is None or quote_interpolated is None:
+                        self.logger.error(f"插值失败: {ind_name}")
+                        continue
+                    
+                    # 对齐数据到交易日期
+                    aligned_base = base_interpolated.reindex(df.index)
+                    aligned_quote = quote_interpolated.reindex(df.index)
                     
                     # 计算差异指标
-                    df[f"{ind_name}_DIFF"] = aligned_base[ind_info['value_col']] - aligned_quote[ind_info['value_col']]
-                    df[f"{ind_name}_RATIO"] = aligned_base[ind_info['value_col']] / aligned_quote[ind_info['value_col']]
-                    df[f"{ind_name}_SPREAD"] = aligned_base[ind_info['value_col']] - aligned_quote[ind_info['value_col']]
+                    df[f"{ind_name}_DIFF"] = aligned_base - aligned_quote
+                    df[f"{ind_name}_RATIO"] = aligned_base / aligned_quote
+                    df[f"{ind_name}_SPREAD"] = (aligned_base - aligned_quote) / aligned_quote
                     
                 except Exception as e:
                     self.logger.error(f"处理{ind_name}指标失败: {str(e)}")
