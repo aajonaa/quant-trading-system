@@ -20,17 +20,22 @@ class FeatureEngineer:
         df = self.process_macro_features(df, pair)
         df = self.generate_iceemdan_features(df)
         
-        # 2. 数据预处理
-        df = self.preprocess_features(df)
-        
-        # 3. 保存原始特征到backend/FE目录
+        # 2. 保存原始特征到backend/FE目录（不做归一化）
         output_path = os.path.join(f'{pair}_processed.csv')
         df.to_csv(output_path, index=False)
+        self.logger.info(f"已保存原始特征数据到 {output_path}")
         
-        # 4. 降维处理
-        df_pca = self.dimension_reduction(df)
+        # 3. 数据预处理（处理缺失值、异常值等，但不做归一化）
+        df_clean = self.preprocess_features(df)
+        
+        # 4. 对数据进行归一化，然后再进行PCA降维
+        df_normalized = self.normalize_features(df_clean)
+        
+        # 5. 降维处理
+        df_pca = self.dimension_reduction(df_normalized)
         pca_path = os.path.join(f'{pair}_PCA.csv')
         df_pca.to_csv(pca_path, index=False)
+        self.logger.info(f"已保存PCA降维后的数据到 {pca_path}")
         
         return df_pca
     
@@ -198,7 +203,7 @@ class FeatureEngineer:
         return df
     
     def preprocess_features(self, df):
-        """预处理特征"""
+        """预处理特征（处理缺失值和异常值，但不做归一化）"""
         # 确保数据不为空
         if df.empty:
             self.logger.error("数据帧为空")
@@ -222,22 +227,24 @@ class FeatureEngineer:
             self.logger.error("删除空值后数据帧为空")
             return df
         
-        # 获取数值列
+        # 检测并处理异常值（可选）
+        # 这里使用3倍标准差法检测异常值
         numeric_cols = df.select_dtypes(include=[np.number]).columns
-        
-        # 标准化数值特征
-        try:
-            df[numeric_cols] = self.scaler.fit_transform(df[numeric_cols])
-        except Exception as e:
-            self.logger.error(f"标准化过程出错: {str(e)}")
-            self.logger.error(f"数据形状: {df.shape}")
-            self.logger.error(f"数值列: {numeric_cols}")
-            raise
+        for col in numeric_cols:
+            mean = df[col].mean()
+            std = df[col].std()
+            outliers = df[abs(df[col] - mean) > 3 * std]
+            if len(outliers) > 0:
+                self.logger.warning(f"{col} 存在 {len(outliers)} 个异常值")
+                # 可以选择替换异常值为均值或中位数，或者保留原值
+                # df.loc[abs(df[col] - mean) > 3 * std, col] = mean  # 替换为均值
         
         return df
     
     def dimension_reduction(self, df):
         """特征降维"""
+        self.logger.info("开始PCA降维...")
+        
         # 保存日期列
         date_col = df['Date'] if 'Date' in df.columns else df.index
         
@@ -255,7 +262,8 @@ class FeatureEngineer:
         df_pca['Date'] = date_col  # 添加日期列
         
         # 记录降维信息
-        self.logger.info(f"\nPCA解释方差比:")
+        self.logger.info(f"PCA降维后的特征数: {pca_result.shape[1]}")
+        self.logger.info(f"PCA解释方差比:")
         for i, ratio in enumerate(self.pca.explained_variance_ratio_):
             cumsum = np.sum(self.pca.explained_variance_ratio_[:i+1])
             self.logger.info(f"PC{i+1}: {ratio:.4f} (累计: {cumsum:.4f})")
@@ -266,6 +274,31 @@ class FeatureEngineer:
         df_pca = df_pca[cols]
         
         return df_pca
+
+    def normalize_features(self, df):
+        """对特征进行归一化处理"""
+        self.logger.info("对特征进行归一化处理...")
+        
+        # 保存非数值列
+        non_numeric_cols = df.select_dtypes(exclude=[np.number]).columns.tolist()
+        non_numeric_data = df[non_numeric_cols].copy() if non_numeric_cols else None
+        
+        # 获取数值列
+        numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+        
+        # 应用标准化
+        normalized_data = self.scaler.fit_transform(df[numeric_cols])
+        
+        # 创建新的DataFrame
+        df_normalized = pd.DataFrame(normalized_data, columns=numeric_cols, index=df.index)
+        
+        # 添加回非数值列
+        if non_numeric_data is not None:
+            df_normalized = pd.concat([non_numeric_data, df_normalized], axis=1)
+        
+        self.logger.info(f"归一化完成，处理了 {len(numeric_cols)} 个数值特征")
+        
+        return df_normalized
 
 def main():
     """主函数"""

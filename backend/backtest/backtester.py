@@ -27,7 +27,7 @@ class ForexBacktester:
         """加载所有货币对的信号数据"""
         try:
             self.pairs_data = {}
-            signal_files = list(self.signals_dir.glob("*_signals.csv"))
+            signal_files = list(self.signals_dir.glob("*_backtest.csv"))
             
             if not signal_files:
                 self.logger.error("未找到信号文件")
@@ -89,8 +89,8 @@ class ForexBacktester:
                 
                 for i in range(1, len(df)):
                     date = df.index[i]
-                    signal = df['Ensemble_Signal'].iloc[i]
-                    confidence = abs(df['Ensemble_Proba'].iloc[i]) if 'Ensemble_Proba' in df else 1.0
+                    signal = df['Signal'].iloc[i]
+                    confidence = abs(df['Proba'].iloc[i]) if 'Ensemble_Proba' in df else 1.0
                     price = df['Close'].iloc[i]
                     prev_price = df['Close'].iloc[i-1]
                     
