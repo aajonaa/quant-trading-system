@@ -88,9 +88,35 @@ class RNNCNN(nn.Module):
         self.fc = nn.Linear(16 * 5, 1)
         
     def forward(self, x):
-        rnn_out, _ = self.rnn(x)
-        cnn_out = self.cnn(rnn_out.transpose(1, 2))
-        return self.fc(cnn_out.flatten(1))
+        # 确保输入是3D: [batch, seq_len, features]
+        if x.dim() == 2:
+            x = x.unsqueeze(0)  # 添加批次维度
+        elif x.dim() > 3:
+            x = x.reshape(x.size(0), x.size(1), -1)  # 将4D压缩为3D
+            
+        # 记录输入形状以便调试
+        batch_size, seq_len, features = x.shape
+        
+        try:
+            rnn_out, _ = self.rnn(x)
+            
+            # 确保CNN输入形状正确: [batch, channels, seq_len]
+            cnn_in = rnn_out.transpose(1, 2)
+            
+            # 动态调整全连接层
+            cnn_out = self.cnn(cnn_in)
+            flattened = cnn_out.flatten(1)
+            
+            # 如果flattened的大小与fc的输入大小不匹配，则调整fc层
+            if self.fc.in_features != flattened.size(1):
+                self.fc = nn.Linear(flattened.size(1), 1).to(flattened.device)
+                
+            return self.fc(flattened)
+        except Exception as e:
+            # 出错时提供更多信息
+            print(f"RNNCNN前向传播错误: {e}")
+            print(f"输入形状: batch={batch_size}, seq={seq_len}, features={features}")
+            raise
         
     def get_params(self):
         return {
@@ -120,23 +146,31 @@ class DeepCNN(nn.Module):
         self.fc = nn.Linear((filters//4) * 5, 1)
         
     def forward(self, x):
+        # 确保输入是3D: [batch, seq_len, features]
+        if x.dim() == 2:
+            x = x.unsqueeze(0)
+        elif x.dim() > 3:
+            x = x.reshape(x.size(0), x.size(1), -1)
+            
+        # 转置为CNN所需的形状: [batch, features, seq_len]
         x = x.transpose(1, 2)
-        cnn_out = self.cnn(x)
-        return self.fc(cnn_out.flatten(1))
         
-    def get_params(self):
-        return {
-            'filters': self.filters,
-            'dropout': self.dropout
-        }
-        
-    def set_params(self, filters, dropout):
-        self.filters = filters
-        self.dropout = dropout
-        return self
+        try:
+            cnn_out = self.cnn(x)
+            flattened = cnn_out.flatten(1)
+            
+            # 动态调整全连接层
+            if self.fc.in_features != flattened.size(1):
+                self.fc = nn.Linear(flattened.size(1), 1).to(flattened.device)
+                
+            return self.fc(flattened)
+        except Exception as e:
+            print(f"DeepCNN前向传播错误: {e}")
+            print(f"输入形状: {x.shape}")
+            raise
 
 class TransformerModel(nn.Module):
-    def __init__(self, input_dim, nhead=8, dim_feedforward=256, dropout=0.1):
+    def __init__(self, input_dim, nhead=4, dim_feedforward=256, dropout=0.1):
         super().__init__()
         self.nhead = nhead
         self.dim_feedforward = dim_feedforward
@@ -155,16 +189,30 @@ class TransformerModel(nn.Module):
             d_model=self.input_dim, 
             nhead=nhead,
             dim_feedforward=dim_feedforward,
-            dropout=dropout
+            dropout=dropout,
+            batch_first=True
         )
-        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=3)
+        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=2)
         self.fc = nn.Linear(self.input_dim, 1)
         
     def forward(self, x):
-        # 如果需要，调整输入维度
-        x = self.input_projection(x)
-        transformer_out = self.transformer(x)
-        return self.fc(transformer_out.mean(1))
+        # 确保输入是3D: [batch, seq_len, features]
+        if x.dim() == 2:
+            x = x.unsqueeze(0)
+        elif x.dim() > 3:
+            x = x.reshape(x.size(0), x.size(1), -1)
+            
+        try:
+            # 如果需要，调整输入维度
+            x = self.input_projection(x)
+            transformer_out = self.transformer(x)
+            
+            # 取序列的平均值作为特征
+            return self.fc(transformer_out.mean(1))
+        except Exception as e:
+            print(f"Transformer前向传播错误: {e}")
+            print(f"输入形状: {x.shape}")
+            raise
         
     def get_params(self):
         return {
@@ -360,6 +408,16 @@ class MultiStepPredictor:
             return None
            
     def train_deep_models(self, X, y, device='cpu'):
+        """训练深度学习模型"""
+        self.logger.info(f"训练深度学习模型，输入形状: {X.shape}")
+        
+        # 检查并调整输入维度
+        if len(X.shape) == 4:  # 如果是4D张量 [samples, lookback, features, channels]
+            self.logger.info(f"检测到4D输入，调整为3D...")
+            # 将形状从 [samples, lookback, features, channels] 转换为 [samples, lookback, features*channels]
+            X = X.reshape(X.shape[0], X.shape[1], -1)
+            self.logger.info(f"调整后的输入形状: {X.shape}")
+        
         input_dim = X.shape[2]
         
         # 使用优化后的模型结构
@@ -367,6 +425,7 @@ class MultiStepPredictor:
         self.base_models['deep_cnn'] = self.optimize_dl_model_structure('deep_cnn', input_dim).to(device)
         self.base_models['transformer'] = self.optimize_dl_model_structure('transformer', input_dim).to(device)
         
+        # 创建数据集和数据加载器
         dataset = TimeSeriesDataset(X, self.lookback, max(self.horizons))
         dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
         
@@ -379,33 +438,56 @@ class MultiStepPredictor:
             patience = 5
             counter = 0
             
-            for epoch in range(30):  # 增加轮次来获取更好的结果
+            for epoch in range(10):  # 减少轮次以加快训练
                 epoch_loss = 0
                 batches = 0
                 
                 for batch_x, batch_y in dataloader:
-                    batch_x, batch_y = batch_x.to(device), batch_y.to(device)
-                    optimizer.zero_grad()
-                    output = model(batch_x)
-                    loss = criterion(output, batch_y.reshape(output.shape))
-                    loss.backward()
-                    optimizer.step()
+                    # 确保输入维度正确
+                    if batch_x.dim() > 3:
+                        self.logger.warning(f"输入维度过高: {batch_x.shape}，正在调整...")
+                        batch_x = batch_x.reshape(batch_x.size(0), batch_x.size(1), -1)  # 将4D压缩为3D
                     
-                    epoch_loss += loss.item()
-                    batches += 1
+                    batch_x, batch_y = batch_x.to(device), batch_y.to(device)
+                    
+                    # 确保batch_y的形状与模型输出匹配
+                    if batch_y.dim() > 2:
+                        batch_y = batch_y.reshape(batch_y.size(0), -1)
+                    
+                    optimizer.zero_grad()
+                    
+                    try:
+                        output = model(batch_x)
+                        # 确保输出和目标形状匹配
+                        if output.size(1) > batch_y.size(1):
+                            output = output[:, :batch_y.size(1)]
+                        elif output.size(1) < batch_y.size(1):
+                            batch_y = batch_y[:, :output.size(1)]
+                            
+                        loss = criterion(output, batch_y)
+                        loss.backward()
+                        optimizer.step()
+                        
+                        epoch_loss += loss.item()
+                        batches += 1
+                    except Exception as e:
+                        self.logger.error(f"训练 {name} 时出错: {str(e)}")
+                        self.logger.error(f"batch_x 形状: {batch_x.shape}, batch_y 形状: {batch_y.shape}")
+                        continue
                 
-                avg_loss = epoch_loss / batches
-                self.logger.info(f"Epoch {epoch+1}, {name} 平均损失: {avg_loss:.6f}")
-                
-                # 早停法
-                if avg_loss < best_loss:
-                    best_loss = avg_loss
-                    counter = 0
-                else:
-                    counter += 1
-                    if counter >= patience:
-                        self.logger.info(f"{name} 训练早停在 epoch {epoch+1}")
-                        break
+                if batches > 0:
+                    avg_loss = epoch_loss / batches
+                    self.logger.info(f"Epoch {epoch+1}, {name} 平均损失: {avg_loss:.6f}")
+                    
+                    # 早停法
+                    if avg_loss < best_loss:
+                        best_loss = avg_loss
+                        counter = 0
+                    else:
+                        counter += 1
+                        if counter >= patience:
+                            self.logger.info(f"{name} 训练早停在 epoch {epoch+1}")
+                            break
                         
     def optimize_meta_model(self, X, y):
         """优化元模型参数"""
@@ -633,7 +715,7 @@ def main():
     os.makedirs('signals', exist_ok=True)
     
     # 读取所有货币对的数据
-    pairs = ['CNYAUD', 'CNYEUR', 'CNYGBP', 'CNYJPY', 'CNYUSD']
+    pairs = ['CNYAUD']           # , 'CNYEUR', 'CNYGBP', 'CNYJPY', 'CNYUSD']  暂时不加入，观看一个货币对的性能！
     results = []
     
     for pair in pairs:
