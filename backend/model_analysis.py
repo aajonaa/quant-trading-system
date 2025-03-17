@@ -101,29 +101,56 @@ class CNNLSTM(nn.Module):
         return x
 
 
-# 定义TCN模块
+# 定义TCN模型的基本块
 class TemporalBlock(nn.Module):
     def __init__(self, n_inputs, n_outputs, kernel_size, stride, dilation, padding, dropout=0.2):
         super(TemporalBlock, self).__init__()
-        self.conv1 = nn.utils.weight_norm(nn.Conv1d(n_inputs, n_outputs, kernel_size,
-                                                    stride=stride, padding=padding, dilation=dilation))
-        self.relu1 = nn.ReLU()
-        self.dropout1 = nn.Dropout(dropout)
-
-        self.conv2 = nn.utils.weight_norm(nn.Conv1d(n_outputs, n_outputs, kernel_size,
-                                                    stride=stride, padding=padding, dilation=dilation))
-        self.relu2 = nn.ReLU()
-        self.dropout2 = nn.Dropout(dropout)
-
-        self.net = nn.Sequential(self.conv1, self.relu1, self.dropout1,
-                                 self.conv2, self.relu2, self.dropout2)
-
-        self.downsample = nn.Conv1d(n_inputs, n_outputs, 1) if n_inputs != n_outputs else None
+        self.conv1 = nn.utils.parametrizations.weight_norm(nn.Conv1d(n_inputs, n_outputs, kernel_size,
+                                           stride=stride, padding=padding, dilation=dilation))
         self.relu = nn.ReLU()
-
+        self.dropout = nn.Dropout(dropout)
+        self.conv2 = nn.utils.parametrizations.weight_norm(nn.Conv1d(n_outputs, n_outputs, kernel_size,
+                                           stride=stride, padding=padding, dilation=dilation))
+        
+        # 当输入和输出维度不同时，使用1x1卷积进行维度匹配
+        self.downsample = nn.Conv1d(n_inputs, n_outputs, 1) if n_inputs != n_outputs else None
+        self.init_weights()
+        
+    def init_weights(self):
+        # 初始化权重
+        self.conv1.weight.data.normal_(0, 0.01)
+        self.conv2.weight.data.normal_(0, 0.01)
+        if self.downsample is not None:
+            self.downsample.weight.data.normal_(0, 0.01)
+            
     def forward(self, x):
-        out = self.net(x)
-        res = x if self.downsample is None else self.downsample(x)
+        # 保存输入用于残差连接
+        res = x
+        
+        # 第一个卷积块
+        out = self.conv1(x)
+        out = self.relu(out)
+        out = self.dropout(out)
+        
+        # 第二个卷积块
+        out = self.conv2(out)
+        out = self.relu(out)
+        out = self.dropout(out)
+        
+        # 残差连接
+        if self.downsample is not None:
+            res = self.downsample(res)
+            
+        # 确保维度匹配
+        if out.size(2) != res.size(2):
+            # 如果序列长度不匹配，进行裁剪或填充
+            if out.size(2) > res.size(2):
+                # 裁剪out以匹配res
+                out = out[:, :, :res.size(2)]
+            else:
+                # 裁剪res以匹配out
+                res = res[:, :, :out.size(2)]
+                
         return self.relu(out + res)
 
 
@@ -132,7 +159,7 @@ class TCN(nn.Module):
     def __init__(self, input_dim, num_channels=[32, 64, 128], kernel_size=3, dropout=0.2):
         super(TCN, self).__init__()
         self.input_dim = input_dim
-
+        
         layers = []
         num_levels = len(num_channels)
         for i in range(num_levels):
@@ -141,26 +168,26 @@ class TCN(nn.Module):
             out_channels = num_channels[i]
             layers += [TemporalBlock(in_channels, out_channels, kernel_size, stride=1, dilation=dilation_size,
                                      padding=(kernel_size - 1) * dilation_size, dropout=dropout)]
-
+        
         self.network = nn.Sequential(*layers)
         self.fc = nn.Linear(num_channels[-1], 1)
-
+        
     def forward(self, x):
         # 输入形状: (batch_size, seq_len, input_dim)
         batch_size, seq_len, _ = x.size()
-
+        
         # 转换为TCN输入形状: (batch_size, input_dim, seq_len)
         x = x.permute(0, 2, 1)
-
-        # TCN层
+        
+        # 通过TCN网络
         x = self.network(x)
-
-        # 全局平均池化
-        x = torch.mean(x, dim=2)
-
+        
+        # 使用最后一个时间步的特征进行预测
+        x = x[:, :, -1]  # 形状: (batch_size, num_channels[-1])
+        
         # 全连接层
-        x = self.fc(x)
-
+        x = self.fc(x)  # 形状: (batch_size, 1)
+        
         return x
 
 
@@ -218,6 +245,7 @@ class MultiStepPredictor:
         self.meta_model = None
         self.original_prices = None
         self.dates = None
+        self.horizon_weights = {h: (1 / h) for h in horizons}
 
     def prepare_data(self, df):
         """准备训练数据，返回不同预测步长的数据字典"""
@@ -494,8 +522,7 @@ class MultiStepPredictor:
                     output = tcn(batch_x)
                     
                     # 确保输出和目标维度匹配
-                    batch_y = batch_y.reshape(batch_y.size(0), -1)
-                    output = output.reshape(output.size(0), -1)
+                    batch_y = batch_y.view(batch_y.size(0), -1)
                     
                     # 计算损失
                     loss = criterion(output, batch_y)
@@ -508,6 +535,8 @@ class MultiStepPredictor:
             self.logger.info("TCN模型训练完成")
         except Exception as e:
             self.logger.error(f"训练TCN模型时出错: {str(e)}")
+            import traceback
+            self.logger.error(traceback.format_exc())  # 打印完整的错误堆栈
         
         # 训练GRU模型
         try:
@@ -608,92 +637,169 @@ class MultiStepPredictor:
             return np.array([])
 
     def predict_multi_horizon(self, data_dict, ml_models, dl_models):
-        """使用多个预测步长进行预测，并使用加权方法合并结果"""
-        horizon_predictions = {}
-
-        # 为每个预测步长分配权重，步长越短权重越大
-        total_horizons = sum(self.horizons)
-        weights = {h: (total_horizons - h + 1) / total_horizons for h in self.horizons}
-        self.logger.info(f"预测步长权重: {weights}")
-
-        # 对每个预测步长进行预测
+        """生成多步预测"""
+        self.logger.info(f"预测步长权重: {self.horizon_weights}")
+        
+        all_predictions = []
+        prediction_lengths = []
+        
         for horizon in self.horizons:
             self.logger.info(f"处理预测步长 {horizon}...")
-            X, _ = data_dict[horizon]
-            X_flat = X.reshape(X.shape[0], -1)
+            X_test, _ = data_dict[horizon]
+            X_test_flat = X_test.reshape(X_test.shape[0], -1)
+            
+            # 存储当前步长的所有模型预测
+            horizon_predictions = {}
+            
+            # 机器学习模型预测
+            for model_name, model in ml_models.items():
+                try:
+                    preds = model.predict(X_test_flat)
+                    # 检查并处理NaN值
+                    if np.isnan(preds).any():
+                        self.logger.warning(f"{model_name} 在步长 {horizon} 的预测包含NaN值，使用0填充")
+                        preds = np.nan_to_num(preds, nan=0.0)
+                    horizon_predictions[model_name] = preds * self.horizon_weights[horizon]
+                    self.logger.info(f"{model_name} 在步长 {horizon} 的预测完成")
+                except Exception as e:
+                    self.logger.error(f"{model_name} 在步长 {horizon} 的预测出错: {str(e)}")
+            
+            # 深度学习模型预测
+            for model_name, model in dl_models.items():
+                try:
+                    X_tensor = torch.FloatTensor(X_test)
+                    with torch.no_grad():
+                        preds = model(X_tensor).numpy().flatten()
+                    # 检查并处理NaN值
+                    if np.isnan(preds).any():
+                        self.logger.warning(f"{model_name} 在步长 {horizon} 的预测包含NaN值，使用0填充")
+                        preds = np.nan_to_num(preds, nan=0.0)
+                    horizon_predictions[model_name] = preds * self.horizon_weights[horizon]
+                    self.logger.info(f"{model_name} 在步长 {horizon} 的预测完成")
+                except Exception as e:
+                    self.logger.error(f"{model_name} 在步长 {horizon} 的预测出错: {str(e)}")
+            
+            # 将当前步长的预测添加到总预测中
+            if horizon_predictions:
+                all_predictions.append(horizon_predictions)
+                # 记录每个步长的预测长度
+                for model_name, preds in horizon_predictions.items():
+                    prediction_lengths.append(len(preds))
+        
+        # 合并所有步长的预测
+        if not all_predictions:
+            return []
+        
+        # 找出所有预测中的最小长度，以确保所有预测可以对齐
+        min_length = min(prediction_lengths) if prediction_lengths else 0
+        self.logger.info(f"调整所有预测到最小长度: {min_length}")
+        
+        # 创建一个字典来存储所有模型的对齐预测
+        combined_predictions = {}
+        
+        # 首先初始化字典
+        for horizon_pred in all_predictions:
+            for model_name in horizon_pred.keys():
+                if model_name not in combined_predictions:
+                    combined_predictions[model_name] = np.zeros(min_length)
+        
+        # 然后累加预测，确保长度一致
+        for horizon_pred in all_predictions:
+            for model_name, preds in horizon_pred.items():
+                # 截断或填充预测以匹配最小长度
+                if len(preds) > min_length:
+                    preds = preds[:min_length]
+                elif len(preds) < min_length:
+                    # 这种情况不应该发生，但为了安全起见
+                    self.logger.warning(f"{model_name} 预测长度 {len(preds)} 小于最小长度 {min_length}，填充0")
+                    padding = np.zeros(min_length - len(preds))
+                    preds = np.concatenate([preds, padding])
+                
+                combined_predictions[model_name] += preds
+        
+        # 将所有模型的预测合并为一个特征矩阵
+        X_combined = np.column_stack([preds for model_name, preds in combined_predictions.items()])
+        
+        # 检查并处理最终预测中的NaN值
+        if np.isnan(X_combined).any():
+            self.logger.warning("合并后的预测包含NaN值，使用0填充")
+            X_combined = np.nan_to_num(X_combined, nan=0.0)
+        
+        return X_combined
 
-            # 获取该步长的预测
-            pred = self.predict_for_horizon(horizon, X_flat, ml_models, dl_models)
-            if len(pred) > 0:
-                horizon_predictions[horizon] = pred
-
-        # 如果没有有效预测，返回空数组
-        if not horizon_predictions:
-            self.logger.warning("没有有效的预测结果")
-            return np.array([])
-
-        # 找出所有预测结果中的最小长度
-        min_length = min(len(pred) for pred in horizon_predictions.values())
-
-        # 创建一个新的数组来存储加权预测结果
-        weighted_predictions = np.zeros(min_length)
-
-        # 对每个预测步长的结果进行加权平均
-        for horizon, predictions in horizon_predictions.items():
-            weighted_predictions += weights[horizon] * predictions[:min_length]
-
-        # 归一化加权预测
-        weighted_predictions /= sum(weights.values())
-
-        return weighted_predictions
-
-    def train_meta_model(self, base_predictions, returns):
+    def train_meta_model(self, X, y):
         """训练元模型"""
-        self.logger.info("训练元模型...")
-
-        # 创建目标变量：未来收益率的符号
-        y = np.sign(returns)
-
-        # 训练元模型
         try:
-            self.meta_model = GradientBoostingClassifier(n_estimators=100, learning_rate=0.1, max_depth=3,
-                                                         random_state=42)
-            self.meta_model.fit(base_predictions.reshape(-1, 1), y)
-            self.logger.info("元模型训练完成")
+            self.logger.info("训练元模型...")
+            
+            # 检查输入数据是否包含NaN
+            if np.isnan(X).any():
+                self.logger.warning("输入特征包含NaN值，使用0填充")
+                X = np.nan_to_num(X, nan=0.0)
+            
+            if np.isnan(y).any():
+                self.logger.warning("目标变量包含NaN值，使用0填充")
+                y = np.nan_to_num(y, nan=0.0)
+            
+            # 创建分类标签：上涨(1)、下跌(-1)、持平(0)
+            threshold = 0.001  # 1‰的变动阈值
+            y_class = np.zeros_like(y)
+            y_class[y > threshold] = 1  # 上涨
+            y_class[y < -threshold] = -1  # 下跌
+            
+            # 训练梯度提升分类器
+            self.meta_model = GradientBoostingClassifier(
+                n_estimators=100, 
+                learning_rate=0.1, 
+                max_depth=3, 
+                random_state=42
+            )
+            
+            self.meta_model.fit(X, y_class)
+            
+            # 计算训练集准确率
+            train_preds = self.meta_model.predict(X)
+            accuracy = np.mean(train_preds == y_class)
+            self.logger.info(f"元模型训练集准确率: {accuracy:.4f}")
+            
         except Exception as e:
             self.logger.error(f"训练元模型时出错: {str(e)}")
+            # 创建一个简单的备用模型
+            self.meta_model = None
 
-    def generate_signals(self, predictions, threshold=0.0):
-        """根据预测生成交易信号"""
-        self.logger.info("生成交易信号...")
-
-        # 使用元模型预测概率
+    def generate_signals(self, X):
+        """生成交易信号"""
         try:
-            probs = self.meta_model.predict_proba(predictions.reshape(-1, 1))[:, 1]
-
-            # 生成信号
-            signals = np.zeros(len(predictions))
-            signals[probs > 0.66] = 1  # 买入信号
-            signals[probs < 0.33] = -1  # 卖出信号
-
-            # 优化信号，避免频繁交易
-            signals = self.optimize_signals(signals)
-
-            return signals
+            self.logger.info("生成交易信号...")
+            
+            # 检查输入数据是否包含NaN
+            if np.isnan(X).any():
+                self.logger.warning("输入特征包含NaN值，使用0填充")
+                X = np.nan_to_num(X, nan=0.0)
+            
+            # 如果元模型训练失败，使用简单规则生成信号
+            if self.meta_model is None:
+                self.logger.warning("元模型不可用，使用简单规则生成信号")
+                # 使用第一个模型的预测作为信号
+                signals = np.zeros(X.shape[0])
+                signals[X[:, 0] > 0] = 1  # 上涨预测
+                signals[X[:, 0] < 0] = -1  # 下跌预测
+                return signals
+            
+            # 使用元模型预测
+            signals = self.meta_model.predict(X)
+            
+            # 应用信号平滑：避免频繁交易
+            smoothed_signals = self.smooth_signals(signals)
+            
+            return smoothed_signals
+            
         except Exception as e:
             self.logger.error(f"生成信号时出错: {str(e)}")
+            # 返回空信号
+            return np.zeros(X.shape[0])
 
-            # 如果元模型失败，使用简单阈值方法
-            signals = np.zeros(len(predictions))
-            signals[predictions > threshold] = 1  # 买入信号
-            signals[predictions < -threshold] = -1  # 卖出信号
-
-            # 优化信号，避免频繁交易
-            signals = self.optimize_signals(signals)
-
-            return signals
-
-    def optimize_signals(self, signals, min_hold_period=5):
+    def smooth_signals(self, signals, min_hold_period=5):
         """优化信号，避免频繁交易"""
         optimized = signals.copy()
 
@@ -718,24 +824,113 @@ class MultiStepPredictor:
         return optimized
 
     def backtest(self, signals, prices, dates):
-        """回测交易信号，只返回时间、收盘价和信号"""
-        self.logger.info("进行回测...")
-
-        # 确保数据长度一致
-        min_length = min(len(signals), len(prices) - 1, len(dates))
-        signals = signals[:min_length]
-        prices = prices[:min_length]
-        dates = dates[:min_length]
-
-        # 创建回测结果
-        backtest_data = {
-            'dates': dates,
-            'prices': prices,
-            'signals': signals
-        }
-
-        self.logger.info("回测数据准备完成")
-        return backtest_data
+        """回测交易信号"""
+        try:
+            self.logger.info("进行回测...")
+            
+            # 确保信号和价格长度匹配
+            if len(signals) + 1 != len(prices):
+                self.logger.warning(f"信号长度 ({len(signals)}) 和价格长度 ({len(prices)}) 不匹配，调整价格长度")
+                if len(signals) + 1 < len(prices):
+                    prices = prices[-(len(signals)+1):]
+                else:
+                    # 如果信号比价格多，截断信号
+                    signals = signals[:len(prices)-1]
+            
+            # 初始资金
+            initial_capital = 10000
+            capital = initial_capital
+            position = 0  # 0表示空仓，1表示多头，-1表示空头
+            
+            # 记录每次交易
+            trades = []
+            equity_curve = [capital]
+            
+            for i in range(len(signals)):
+                current_price = prices[i]
+                next_price = prices[i+1]
+                signal = signals[i]
+                
+                # 检查信号是否有效
+                if np.isnan(signal):
+                    self.logger.warning(f"第 {i} 个信号为NaN，跳过")
+                    continue
+                
+                # 执行交易
+                if signal == 1 and position <= 0:  # 买入信号
+                    position = 1
+                    trades.append({
+                        'date': dates[i],
+                        'action': 'BUY',
+                        'price': current_price,
+                        'capital': capital
+                    })
+                elif signal == -1 and position >= 0:  # 卖出信号
+                    position = -1
+                    trades.append({
+                        'date': dates[i],
+                        'action': 'SELL',
+                        'price': current_price,
+                        'capital': capital
+                    })
+                
+                # 更新资金
+                if position == 1:
+                    capital = capital * (next_price / current_price)
+                elif position == -1:
+                    capital = capital * (current_price / next_price)
+                
+                equity_curve.append(capital)
+            
+            # 计算回测指标
+            returns = np.diff(equity_curve) / np.array(equity_curve)[:-1]
+            total_return = (capital - initial_capital) / initial_capital
+            annual_return = total_return / (len(signals) / 252)  # 假设一年252个交易日
+            sharpe_ratio = np.mean(returns) / np.std(returns) * np.sqrt(252) if np.std(returns) > 0 else 0
+            max_drawdown = np.max(np.maximum.accumulate(equity_curve) - equity_curve) / np.max(equity_curve)
+            
+            self.logger.info(f"总收益率: {total_return:.4f}")
+            self.logger.info(f"年化收益率: {annual_return:.4f}")
+            self.logger.info(f"夏普比率: {sharpe_ratio:.4f}")
+            self.logger.info(f"最大回撤: {max_drawdown:.4f}")
+            
+            # 返回回测结果
+            backtest_data = {
+                'signals': signals,
+                'prices': prices[:-1],  # 去掉最后一个价格，使长度与信号匹配
+                'dates': dates,
+                'equity_curve': equity_curve,
+                'trades': trades,
+                'metrics': {
+                    'total_return': total_return,
+                    'annual_return': annual_return,
+                    'sharpe_ratio': sharpe_ratio,
+                    'max_drawdown': max_drawdown
+                }
+            }
+            
+            self.logger.info("回测数据准备完成")
+            return backtest_data
+            
+        except Exception as e:
+            self.logger.error(f"回测过程中出错: {str(e)}")
+            import traceback
+            self.logger.error(traceback.format_exc())
+            
+            # 返回空回测数据
+            return {
+                'signals': signals,
+                'prices': prices[:-1] if len(prices) > len(signals) else prices,
+                'dates': dates,
+                'equity_curve': [10000] * (len(signals) + 1),
+                'trades': [],
+                'metrics': {
+                    'total_return': 0,
+                    'annual_return': 0,
+                    'sharpe_ratio': 0,
+                    'max_drawdown': 0
+                }
+            }
 
     def train_and_predict(self, df):
         """训练模型并生成预测信号"""

@@ -27,7 +27,7 @@ class ForexBacktester:
         """加载所有货币对的信号数据"""
         try:
             self.pairs_data = {}
-            signal_files = list(self.signals_dir.glob("*_backtest.csv"))
+            signal_files = list(self.signals_dir.glob("*_signals.csv"))
             
             if not signal_files:
                 self.logger.error("未找到信号文件")
@@ -70,13 +70,13 @@ class ForexBacktester:
             results = {}
             for pair, df in self.pairs_data.items():
                 # 计算波动率
-                returns = df['Close'].pct_change()
+                returns = df['close'].pct_change()
                 volatility = returns.rolling(20).std() * np.sqrt(252)
                 
                 # 计算趋势
                 if self.params['trend_filter']:
-                    sma20 = df['Close'].rolling(20).mean()
-                    sma50 = df['Close'].rolling(50).mean()
+                    sma20 = df['Price'].rolling(20).mean()
+                    sma50 = df['Price'].rolling(50).mean()
                     trend = (sma20 > sma50).astype(int)
                 
                 # 初始化结果
@@ -91,8 +91,8 @@ class ForexBacktester:
                     date = df.index[i]
                     signal = df['Signal'].iloc[i]
                     confidence = abs(df['Proba'].iloc[i]) if 'Ensemble_Proba' in df else 1.0
-                    price = df['Close'].iloc[i]
-                    prev_price = df['Close'].iloc[i-1]
+                    price = df['price'].iloc[i]
+                    prev_price = df['price'].iloc[i-1]
                     
                     # 检查交易条件
                     vol_check = volatility.iloc[i] <= self.params['vol_threshold']

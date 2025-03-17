@@ -209,35 +209,150 @@ class FeatureEngineer:
             self.logger.error("数据帧为空")
             return df
         
-        # 检查并修正负值
-        if (df['Close'] < 0).any():
-            self.logger.warning("检测到负值，修正为零")
-            df['Close'] = df['Close'].clip(lower=0)
+        # 检查缺失值情况
+        missing_values = df.isnull().sum()
+        missing_percent = (missing_values / len(df)) * 100
+        
+        # 记录缺失值情况
+        self.logger.info("缺失值情况:")
+        for col in df.columns:
+            if missing_percent[col] > 0:
+                self.logger.info(f"{col}: {missing_percent[col]:.2f}% ({missing_values[col]} 个缺失值)")
         
         # 处理无穷值
         df = df.replace([np.inf, -np.inf], np.nan)
         
-        # 使用前向填充和后向填充处理缺失值
-        df = df.fillna(method='ffill').fillna(method='bfill')
+        # 检查并修正负值（仅对价格类数据）
+        price_cols = ['Open', 'High', 'Low', 'Close']
+        for col in price_cols:
+            if col in df.columns and (df[col] < 0).any():
+                self.logger.warning(f"检测到 {col} 列中有负值，修正为零")
+                df[col] = df[col].clip(lower=0)
         
-        # 删除仍然包含空值的行
-        df = df.dropna()
+        # 分别处理不同类型的列
+        numeric_cols = df.select_dtypes(include=[np.number]).columns
+        
+        # 1. 处理时间序列数据（如价格、成交量等）
+        time_series_cols = [col for col in numeric_cols if col in price_cols or 'Volume' in col]
+        for col in time_series_cols:
+            if col in df.columns:
+                # 使用前向填充，然后后向填充
+                df[col] = df[col].fillna(method='ffill').fillna(method='bfill')
+                
+                # 如果仍有缺失值，使用移动平均填充
+                if df[col].isnull().any():
+                    self.logger.warning(f"{col} 仍有缺失值，使用移动平均填充")
+                    ma = df[col].rolling(window=5, min_periods=1).mean()
+                    df[col] = df[col].fillna(ma)
+        
+        # 2. 处理技术指标
+        tech_indicator_cols = [col for col in numeric_cols if 
+                              any(prefix in col for prefix in ['MA', 'momentum', 'volatility', 'BB', 'IMF', 'trend', 'returns'])]
+        for col in tech_indicator_cols:
+            if col in df.columns:
+                # 检查缺失值数量
+                null_count = df[col].isnull().sum()
+                if null_count > 0:
+                    self.logger.info(f"{col} 有 {null_count} 个缺失值，开始填充")
+                    
+                    # 对于基于窗口计算的指标，前面的缺失值是正常的，使用前向填充不合适
+                    # 首先检查是否是窗口开始的缺失值
+                    first_valid_idx = df[col].first_valid_index()
+                    if first_valid_idx is not None and first_valid_idx > 0:
+                        # 对于窗口开始的缺失值，使用第一个有效值填充
+                        first_valid_value = df.loc[first_valid_idx, col]
+                        df.loc[:first_valid_idx, col] = first_valid_value
+                        self.logger.info(f"{col} 的前 {first_valid_idx} 个值使用第一个有效值 {first_valid_value:.4f} 填充")
+                    
+                    # 对于中间的缺失值，使用线性插值
+                    if df[col].isnull().any():
+                        self.logger.info(f"{col} 仍有缺失值，使用线性插值填充")
+                        df[col] = df[col].interpolate(method='linear')
+                    
+                    # 如果仍有缺失值（可能是末尾），使用后向填充
+                    if df[col].isnull().any():
+                        self.logger.info(f"{col} 仍有缺失值，使用后向填充")
+                        df[col] = df[col].fillna(method='bfill')
+                    
+                    # 如果仍有缺失值，使用列均值填充
+                    if df[col].isnull().any():
+                        self.logger.warning(f"{col} 仍有缺失值，使用列均值填充")
+                        df[col] = df[col].fillna(df[col].mean())
+                    
+                    # 验证填充结果
+                    if df[col].isnull().any():
+                        self.logger.error(f"{col} 填充后仍有 {df[col].isnull().sum()} 个缺失值")
+                    else:
+                        self.logger.info(f"{col} 填充完成")
+        
+        # 3. 处理宏观经济指标
+        macro_cols = [col for col in numeric_cols if 
+                     any(indicator in col for indicator in ['CPI', 'GDP', 'INFLATION', 'UNEMPLOYMENT'])]
+        for col in macro_cols:
+            if col in df.columns:
+                # 宏观指标通常变化缓慢，使用前向填充
+                df[col] = df[col].fillna(method='ffill')
+                
+                # 如果前面没有值可填充，使用后向填充
+                df[col] = df[col].fillna(method='bfill')
+                
+                # 如果仍有缺失值，使用线性插值
+                if df[col].isnull().any():
+                    self.logger.warning(f"{col} 仍有缺失值，使用线性插值填充")
+                    df[col] = df[col].interpolate(method='linear')
+        
+        # 4. 处理其他数值列
+        other_numeric_cols = [col for col in numeric_cols if col not in time_series_cols + tech_indicator_cols + macro_cols]
+        for col in other_numeric_cols:
+            if col in df.columns:
+                # 使用前向填充和后向填充
+                df[col] = df[col].fillna(method='ffill').fillna(method='bfill')
+                
+                # 如果仍有缺失值，使用中位数填充（比均值更稳健）
+                if df[col].isnull().any():
+                    self.logger.warning(f"{col} 仍有缺失值，使用中位数填充")
+                    df[col] = df[col].fillna(df[col].median())
+        
+        # 5. 处理非数值列（如日期、字符串等）
+        non_numeric_cols = df.select_dtypes(exclude=[np.number]).columns
+        for col in non_numeric_cols:
+            if col in df.columns and col != 'Date':  # 排除日期列
+                # 使用最频繁值填充
+                if df[col].isnull().any():
+                    self.logger.warning(f"{col} 有缺失值，使用最频繁值填充")
+                    most_frequent = df[col].mode()[0]
+                    df[col] = df[col].fillna(most_frequent)
+        
+        # 检查是否仍有缺失值
+        remaining_nulls = df.isnull().sum().sum()
+        if remaining_nulls > 0:
+            self.logger.warning(f"填充后仍有 {remaining_nulls} 个缺失值，删除这些行")
+            df = df.dropna()
         
         if df.empty:
             self.logger.error("删除空值后数据帧为空")
             return df
         
-        # 检测并处理异常值（可选）
-        # 这里使用3倍标准差法检测异常值
-        numeric_cols = df.select_dtypes(include=[np.number]).columns
+        # 检测并处理异常值
+        self.logger.info("检测异常值...")
         for col in numeric_cols:
-            mean = df[col].mean()
-            std = df[col].std()
-            outliers = df[abs(df[col] - mean) > 3 * std]
-            if len(outliers) > 0:
-                self.logger.warning(f"{col} 存在 {len(outliers)} 个异常值")
-                # 可以选择替换异常值为均值或中位数，或者保留原值
-                # df.loc[abs(df[col] - mean) > 3 * std, col] = mean  # 替换为均值
+            if col in df.columns:
+                # 使用IQR方法检测异常值（比3倍标准差更稳健）
+                Q1 = df[col].quantile(0.25)
+                Q3 = df[col].quantile(0.75)
+                IQR = Q3 - Q1
+                lower_bound = Q1 - 1.5 * IQR
+                upper_bound = Q3 + 1.5 * IQR
+                
+                outliers = df[(df[col] < lower_bound) | (df[col] > upper_bound)]
+                if len(outliers) > 0:
+                    self.logger.warning(f"{col} 存在 {len(outliers)} 个异常值 ({(len(outliers)/len(df))*100:.2f}%)")
+                    
+                    # 对于价格数据，不处理异常值，因为可能是真实的价格波动
+                    if col not in price_cols:
+                        # 对于技术指标，使用截断法处理异常值
+                        self.logger.info(f"对 {col} 的异常值进行截断处理")
+                        df[col] = df[col].clip(lower=lower_bound, upper=upper_bound)
         
         return df
     
