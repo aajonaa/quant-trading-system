@@ -72,7 +72,13 @@ class RNNCNN(nn.Module):
         super().__init__()
         self.hidden_dim = hidden_dim
         self.dropout = dropout
-        self.rnn = nn.LSTM(input_dim, hidden_dim, batch_first=True, dropout=dropout)
+        self.rnn = nn.LSTM(
+            input_dim, 
+            hidden_dim, 
+            num_layers=2,
+            batch_first=True, 
+            dropout=dropout
+        )
         self.cnn = nn.Sequential(
             nn.Conv1d(hidden_dim, 32, 3, padding=1),
             nn.ReLU(),
@@ -136,16 +142,27 @@ class TransformerModel(nn.Module):
         self.dim_feedforward = dim_feedforward
         self.dropout = dropout
         
+        # 确保input_dim能被nhead整除
+        self.input_dim = input_dim
+        if input_dim % nhead != 0:
+            # 调整input_dim为能被nhead整除的最近的数
+            self.input_dim = ((input_dim // nhead) + 1) * nhead
+            self.input_projection = nn.Linear(input_dim, self.input_dim)
+        else:
+            self.input_projection = nn.Identity()
+        
         encoder_layer = nn.TransformerEncoderLayer(
-            d_model=input_dim, 
+            d_model=self.input_dim, 
             nhead=nhead,
             dim_feedforward=dim_feedforward,
             dropout=dropout
         )
         self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=3)
-        self.fc = nn.Linear(input_dim, 1)
+        self.fc = nn.Linear(self.input_dim, 1)
         
     def forward(self, x):
+        # 如果需要，调整输入维度
+        x = self.input_projection(x)
         transformer_out = self.transformer(x)
         return self.fc(transformer_out.mean(1))
         
@@ -209,8 +226,14 @@ class MultiStepPredictor:
         return {h: (np.array(X[h]), np.array(y[h])) for h in self.horizons}
         
     def optimize_ml_model(self, model_name, X, y):
-        """使用PSO优化机器学习模型参数"""
+        """使用PSO优化机器学习模型参数，但限制粒子数和迭代次数以加快速度"""
         self.logger.info(f"开始优化 {model_name} 模型参数...")
+        
+        # PSO优化配置 - 加快优化速度
+        pso_options = {
+            'swarmsize': 1,  # 设置粒子数为1
+            'maxiter': 1     # 设置最大迭代次数为1
+        }
         
         if model_name == 'rf':
             param_ranges = {
@@ -233,7 +256,7 @@ class MultiStepPredictor:
             lb = [param_ranges[param][0] for param in param_ranges]
             ub = [param_ranges[param][1] for param in param_ranges]
             
-            best_params, _ = pso(objective_function, lb, ub)
+            best_params, _ = pso(objective_function, lb, ub, **pso_options)
             
             return {
                 'n_estimators': int(best_params[0]),
@@ -257,7 +280,7 @@ class MultiStepPredictor:
             lb = [param_ranges[param][0] for param in param_ranges]
             ub = [param_ranges[param][1] for param in param_ranges]
             
-            best_params, _ = pso(objective_function, lb, ub)
+            best_params, _ = pso(objective_function, lb, ub, **pso_options)
             
             return {
                 'gamma': best_params[0],
@@ -287,7 +310,7 @@ class MultiStepPredictor:
             lb = [param_ranges[param][0] for param in param_ranges]
             ub = [param_ranges[param][1] for param in param_ranges]
             
-            best_params, _ = pso(objective_function, lb, ub)
+            best_params, _ = pso(objective_function, lb, ub, **pso_options)
             
             return {
                 'n_estimators': int(best_params[0]),
@@ -305,38 +328,25 @@ class MultiStepPredictor:
         self.logger.info(f"优化 {model_name} 模型结构...")
         
         if model_name == 'rnn_cnn':
-            param_ranges = {
-                'hidden_dim': (32, 128),
-                'dropout': (0.1, 0.5)
-            }
-            
-            # 使用网格搜索而不是PSO来简化深度学习模型的结构优化
-            best_hidden_dim = 64  # 默认值
-            best_dropout = 0.2    # 默认值
+            # 使用较小的hidden_dim来避免过拟合
+            best_hidden_dim = min(64, input_dim * 2)
+            best_dropout = 0.2
             
             return RNNCNN(input_dim, hidden_dim=best_hidden_dim, dropout=best_dropout)
             
         elif model_name == 'deep_cnn':
-            param_ranges = {
-                'filters': (32, 128),
-                'dropout': (0.1, 0.5)
-            }
-            
-            best_filters = 64  # 默认值
-            best_dropout = 0.2 # 默认值
+            # 调整filters大小
+            best_filters = min(64, input_dim * 2)
+            best_dropout = 0.2
             
             return DeepCNN(input_dim, filters=best_filters, dropout=best_dropout)
             
         elif model_name == 'transformer':
-            param_ranges = {
-                'nhead': (4, 8),
-                'dim_feedforward': (128, 512),
-                'dropout': (0.1, 0.3)
-            }
-            
-            best_nhead = 8           # 默认值
-            best_dim_feedforward = 256  # 默认值
-            best_dropout = 0.1       # 默认值
+            # 调整nhead，确保input_dim能被nhead整除
+            best_nhead = 4  # 使用较小的head数量
+            # 确保dim_feedforward不会太大
+            best_dim_feedforward = min(256, input_dim * 4)
+            best_dropout = 0.1
             
             return TransformerModel(
                 input_dim, 
@@ -501,34 +511,15 @@ class MultiStepPredictor:
         return signals
         
     def create_backtest_data(self, signals, original_prices, dates):
-        """创建回测数据"""
-        self.logger.info("创建回测数据...")
+        """创建回测数据，只包含信号、时间和Close价格"""
+        self.logger.info("创建简化回测数据...")
         
+        # 只保留信号、时间和价格
         backtest_df = pd.DataFrame({
             'Date': dates[:len(signals)],
-            'Price': original_prices[:len(signals)],
+            'Close': original_prices[:len(signals)],
             'Signal': signals
         })
-        
-        # 计算持仓
-        backtest_df['Position'] = 0
-        position = 0
-        
-        for i in range(len(backtest_df)):
-            if backtest_df.loc[i, 'Signal'] == 1:  # 买入信号
-                position = 1
-            elif backtest_df.loc[i, 'Signal'] == -1:  # 卖出信号
-                position = 0
-            
-            backtest_df.loc[i, 'Position'] = position
-        
-        # 计算回报
-        backtest_df['Return'] = backtest_df['Price'].pct_change()
-        backtest_df['Strategy_Return'] = backtest_df['Position'].shift(1) * backtest_df['Return']
-        
-        # 计算累积回报
-        backtest_df['Cumulative_Market_Return'] = (1 + backtest_df['Return']).cumprod() - 1
-        backtest_df['Cumulative_Strategy_Return'] = (1 + backtest_df['Strategy_Return']).cumprod() - 1
         
         return backtest_df
                 
@@ -682,7 +673,7 @@ def main():
             # 保存信号
             signal_df = pd.DataFrame({
                 'Date': backtest_data['Date'],
-                'Price': backtest_data['Price'],
+                'Close': backtest_data['Close'],
                 'Signal': backtest_data['Signal']
             })
             
