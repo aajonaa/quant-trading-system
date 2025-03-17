@@ -11,6 +11,7 @@ from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.preprocessing import StandardScaler
 import os
 from datetime import datetime
+from pyswarm import pso  # 假设使用 pyswarm 库进行 PSO
 
 class KELM:
     """Kernel Extreme Learning Machine"""
@@ -134,7 +135,7 @@ class MultiStepPredictor:
                 
         return {h: (np.array(X[h]), np.array(y[h])) for h in self.horizons}
         
-    def train_deep_models(self, X, y, device='cuda'):
+    def train_deep_models(self, X, y, device='cpu'):  # 修改默认设备为 'cpu'
         input_dim = X.shape[2]
         
         self.base_models['rnn_cnn'] = RNNCNN(input_dim).to(device)
@@ -158,6 +159,23 @@ class MultiStepPredictor:
                     loss.backward()
                     optimizer.step()
                     
+    def optimize_model_params(self, model, X, y):
+        """使用PSO优化模型参数"""
+        def objective_function(params):
+            # 假设 params 是模型的超参数
+            model.set_params(**params)
+            model.fit(X, y)
+            predictions = model.predict(X)
+            return -np.mean((predictions - y) ** 2)  # 负的MSE作为目标函数
+        
+        # 定义参数范围
+        lb = [0.01, 1]  # 下界
+        ub = [1, 100]   # 上界
+        
+        # 使用PSO进行优化
+        best_params, _ = pso(objective_function, lb, ub)
+        return best_params
+
     def generate_signals(self, predictions, volatility_threshold=1.0):
         signals = np.zeros(len(predictions))
         volatility = np.std(predictions, axis=1)
@@ -196,17 +214,19 @@ class MultiStepPredictor:
             # 训练机器学习模型
             ml_predictions = []
             for name in ['rf', 'kelm', 'xgb']:
+                best_params = self.optimize_model_params(self.base_models[name], X.reshape(X.shape[0], -1), y.reshape(y.shape[0], -1))
+                self.base_models[name].set_params(**best_params)
                 self.base_models[name].fit(X.reshape(X.shape[0], -1), y.reshape(y.shape[0], -1))
                 pred = self.base_models[name].predict(X.reshape(X.shape[0], -1))
                 ml_predictions.append(pred)
                 
             # 训练深度学习模型
-            self.train_deep_models(X, y)
+            self.train_deep_models(X, y, device='cpu')  # 确保使用CPU
             dl_predictions = []
             for name in ['rnn_cnn', 'deep_cnn', 'transformer']:
                 with torch.no_grad():
-                    pred = self.base_models[name](torch.FloatTensor(X).cuda())
-                    dl_predictions.append(pred.cpu().numpy())
+                    pred = self.base_models[name](torch.FloatTensor(X).cpu())
+                    dl_predictions.append(pred.numpy())
                     
             # 合并所有预测
             horizon_predictions = np.column_stack([*ml_predictions, *dl_predictions])

@@ -204,6 +204,11 @@ class FeatureEngineer:
             self.logger.error("数据帧为空")
             return df
         
+        # 检查并修正负值
+        if (df['Close'] < 0).any():
+            self.logger.warning("检测到负值，修正为零")
+            df['Close'] = df['Close'].clip(lower=0)
+        
         # 处理无穷值
         df = df.replace([np.inf, -np.inf], np.nan)
         
