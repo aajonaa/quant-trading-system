@@ -7,25 +7,17 @@ import seaborn as sns
 import matplotlib.gridspec as gridspec
 
 class ForexBacktester:
-    def __init__(self, initial_capital=100000):
+    def __init__(self):
+        self.signals_dir = Path(__file__).parent.parent / 'signals'
+        self.initial_capital = 100000
+        self.pairs_data = {}
         self.logger = logging.getLogger(__name__)
-        self.current_dir = Path(__file__).parent
-        self.signals_dir = self.current_dir.parent / "signals"
-        self.output_dir = self.current_dir / "backtest_results"
-        self.output_dir.mkdir(exist_ok=True)
-        
-        self.initial_capital = initial_capital
-        self.positions = {}  # 持仓状态
-        self.portfolio = {}  # 组合表现
-        
-        # 设置中文字体
-        plt.rcParams['font.sans-serif'] = ['SimHei']
-        plt.rcParams['axes.unicode_minus'] = False
-        
+        # 初始化时就加载数据
+        self.load_data()
+
     def load_data(self):
         """加载所有货币对的信号数据"""
         try:
-            self.pairs_data = {}
             signal_files = list(self.signals_dir.glob("*_signals.csv"))
             
             if not signal_files:
@@ -38,89 +30,56 @@ class ForexBacktester:
                 
                 # 读取信号文件
                 df = pd.read_csv(file)
+                df['Date'] = pd.to_datetime(df['Date'])
                 
                 # 确保必要的列存在
                 required_cols = ['Date', 'Price', 'Signal']
-                missing_cols = [col for col in required_cols if col not in df.columns]
-                
-                if missing_cols:
-                    self.logger.warning(f"{pair} 信号文件缺少必要列: {missing_cols}")
-                    # 尝试修复列名问题
-                    if 'price' in df.columns and 'Price' not in df.columns:
-                        df['Price'] = df['price']
-                    if 'signal' in df.columns and 'Signal' not in df.columns:
-                        df['Signal'] = df['signal']
-                    
-                    # 再次检查
-                    missing_cols = [col for col in required_cols if col not in df.columns]
-                    if missing_cols:
-                        self.logger.error(f"无法修复 {pair} 的列问题，跳过")
-                        continue
-                
-                # 转换日期列
-                df['Date'] = pd.to_datetime(df['Date'])
-                df.set_index('Date', inplace=True)
+                if not all(col in df.columns for col in required_cols):
+                    self.logger.error(f"{pair} 信号文件缺少必要列")
+                    continue
                 
                 # 添加到数据字典
                 self.pairs_data[pair] = df
                 self.logger.info(f"成功加载 {pair} 数据，共 {len(df)} 条记录")
-                
+            
             self.logger.info(f"成功加载 {len(self.pairs_data)} 个货币对的数据")
-            return len(self.pairs_data) > 0
+            return True
             
         except Exception as e:
             self.logger.error(f"加载数据失败: {str(e)}")
-            import traceback
-            self.logger.error(traceback.format_exc())
             return False
-            
-    def run_backtest(self, currency_pair=None, start_date=None, end_date=None, strategy_params=None):
+
+    def run_backtest(self, currency_pair=None, start_date=None, end_date=None):
         """执行回测"""
         try:
-            # 参数验证
-            if not currency_pair:
-                raise ValueError("必须指定货币对")
-            if not start_date:
-                raise ValueError("必须指定开始日期")
-            if not end_date:
-                raise ValueError("必须指定结束日期")
-            
-            # 加载数据
-            if not self.load_data():
-                raise Exception("数据加载失败")
-            
-            # 获取指定货币对的数据
             if currency_pair not in self.pairs_data:
                 raise Exception(f"找不到 {currency_pair} 的数据")
             
             df = self.pairs_data[currency_pair].copy()
             
-            # 过滤日期范围
+            # 日期过滤
             if start_date and end_date:
-                df = df[start_date:end_date]
-                if df.empty:
-                    raise ValueError(f"在指定日期范围内没有找到数据: {start_date} 到 {end_date}")
+                start_date = pd.to_datetime(start_date)
+                end_date = pd.to_datetime(end_date)
+                df = df[(df['Date'] >= start_date) & (df['Date'] <= end_date)]
             
-            # 计算技术指标
-            self._calculate_indicators(df, strategy_params or {})
+            if df.empty:
+                raise Exception("选定日期范围内没有数据")
             
-            # 执行回测计算
-            initial_capital = self.initial_capital
-            position = 0
-            equity = [initial_capital]
+            # 初始化变量
+            equity = [self.initial_capital]
             returns = []
+            position = 0
             
+            # 执行回测
             for i in range(1, len(df)):
-                signal = df['Signal'].iloc[i]
-                price = df['Price'].iloc[i]
-                
-                # 根据信号交易
-                if signal > 0 and position <= 0:
+                if df['Signal'].iloc[i-1] > 0:
                     position = 1
-                elif signal < 0 and position >= 0:
+                elif df['Signal'].iloc[i-1] < 0:
                     position = -1
+                else:
+                    position = 0
                 
-                # 计算收益
                 daily_return = position * (df['Price'].iloc[i] / df['Price'].iloc[i-1] - 1)
                 returns.append(daily_return)
                 equity.append(equity[-1] * (1 + daily_return))
@@ -129,22 +88,27 @@ class ForexBacktester:
             equity_curve = pd.Series(equity, index=df.index)
             returns = pd.Series(returns, index=df.index[1:])
             
-            total_return = (equity[-1] / initial_capital - 1)
-            sharpe_ratio = np.sqrt(252) * returns.mean() / returns.std()
-            max_drawdown = (equity_curve / equity_curve.cummax() - 1).min()
-            win_rate = len(returns[returns > 0]) / len(returns)
+            # 修正最大回撤计算
+            rolling_max = pd.Series(equity).expanding().max()
+            drawdowns = pd.Series(equity) / rolling_max - 1
+            max_drawdown = abs(drawdowns.min())  # 取绝对值
+            
+            total_return = (equity[-1] / self.initial_capital - 1)
+            sharpe_ratio = np.sqrt(252) * returns.mean() / returns.std() if len(returns) > 0 else 0
+            win_rate = len(returns[returns > 0]) / len(returns) if len(returns) > 0 else 0
             
             return {
+                'success': True,
                 'total_return': float(total_return),
                 'sharpe_ratio': float(sharpe_ratio),
-                'max_drawdown': float(max_drawdown),
+                'max_drawdown': float(max_drawdown),  # 现在是正值
                 'win_rate': float(win_rate),
                 'equity_curve': {str(k): float(v) for k, v in equity_curve.to_dict().items()}
             }
             
         except Exception as e:
             self.logger.error(f"回测执行错误: {str(e)}")
-            raise
+            return {'success': False, 'error': str(e)}
 
     def _calculate_indicators(self, df, params):
         """计算各种技术指标"""
@@ -777,7 +741,7 @@ def main():
     
     try:
         # 创建回测器实例
-        backtester = ForexBacktester(initial_capital=100000)
+        backtester = ForexBacktester()
         
         # 加载数据
         if not backtester.load_data():
@@ -791,7 +755,7 @@ def main():
             end_date="2024-12-31"    # 指定结束日期
         )
         
-        if results:
+        if results['success']:
             logger.info("回测完成，结果：")
             logger.info(f"总收益率: {results['total_return']:.2%}")
             logger.info(f"夏普比率: {results['sharpe_ratio']:.2f}")

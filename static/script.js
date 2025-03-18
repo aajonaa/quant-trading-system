@@ -14,6 +14,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 绑定事件监听
     setupEventListeners();
+
+    // 检查登录状态
+    checkLoginStatus();
 });
 
 // 事件监听设置
@@ -26,8 +29,32 @@ function setupEventListeners() {
 
     // 客服按钮点击
     const csButton = document.querySelector('.cs-button');
+    const csClose = document.querySelector('.cs-close');
+    const chatWindow = document.querySelector('.cs-chat-window');
+    
     if (csButton) {
-        csButton.addEventListener('click', toggleCustomerService);
+        csButton.addEventListener('click', function() {
+            if (chatWindow.style.display === 'none' || !chatWindow.style.display) {
+                chatWindow.style.display = 'flex';
+                // 添加欢迎消息
+                if (!document.querySelector('.cs-message')) {
+                    const messagesDiv = document.getElementById('csMessages');
+                    messagesDiv.innerHTML = `
+                        <div class="cs-message service">
+                            <div class="message-content">
+                                您好！我是您的专属客服，很高兴为您服务。请问有什么可以帮助您的吗？
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+        });
+    }
+    
+    if (csClose) {
+        csClose.addEventListener('click', function() {
+            chatWindow.style.display = 'none';
+        });
     }
 
     // 登录按钮点击
@@ -112,17 +139,51 @@ function setupEventListeners() {
             alert(`正在跳转到${this.textContent.trim()}支付页面，金额：¥${amount}`);
         });
     });
+
+    // 设置默认日期范围
+    const startDateInput = document.getElementById('start-date');
+    const endDateInput = document.getElementById('end-date');
+    
+    if (startDateInput && endDateInput) {
+        // 设置开始日期为 2015-01-28
+        startDateInput.value = '2015-01-28';
+        
+        // 设置结束日期为今天
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        endDateInput.value = `${year}-${month}-${day}`;
+        
+        // 初始化日期选择器
+        flatpickr(startDateInput, {
+            dateFormat: 'Y-m-d',
+            minDate: '2015-01-28',
+            maxDate: 'today'
+        });
+        
+        flatpickr(endDateInput, {
+            dateFormat: 'Y-m-d',
+            minDate: '2015-01-28',
+            maxDate: 'today'
+        });
+    }
 }
 
 // 回测功能实现
 async function runBacktest() {
-    const currencyPair = document.getElementById('currency-pair').value;
-    const startDate = document.getElementById('start-date').value;
-    const endDate = document.getElementById('end-date').value;
-
-    showLoading('正在进行回测分析...');
-
     try {
+        showLoading('正在执行回测...');
+        
+        const currencyPair = document.getElementById('currency-pair').value;
+        const startDate = document.getElementById('start-date').value;
+        const endDate = document.getElementById('end-date').value;
+
+        if (!currencyPair || !startDate || !endDate) {
+            showError('请选择货币对和日期范围');
+            return;
+        }
+
         const response = await fetch('/api/single_backtest', {
             method: 'POST',
             headers: {
@@ -137,21 +198,28 @@ async function runBacktest() {
 
         const data = await response.json();
         if (data.success) {
-            updateBacktestResults(data.results);
+            // 清除旧的图表
+            const chartContainer = document.getElementById('equity-curve');
+            if (chartContainer) {
+                const ctx = chartContainer.getContext('2d');
+                ctx.clearRect(0, 0, chartContainer.width, chartContainer.height);
+            }
+            
+            // 显示新的回测结果
+            displayBacktestResults(data.results);
         } else {
-            showError(data.error);
+            showError(data.error || '回测执行失败');
         }
     } catch (error) {
-        showError('回测过程发生错误');
+        showError('回测执行出错');
         console.error(error);
     } finally {
         hideLoading();
     }
 }
 
-// 更新回测结果
-function updateBacktestResults(results) {
-    // 更新指标卡片
+function displayBacktestResults(results) {
+    // 显示回测指标
     const metricsRow = document.querySelector('.metrics-row');
     metricsRow.innerHTML = `
         <div class="metric-card">
@@ -173,45 +241,62 @@ function updateBacktestResults(results) {
     `;
 
     // 绘制权益曲线
-    drawEquityCurve(results.equity_curve);
-}
-
-// 绘制权益曲线
-function drawEquityCurve(data) {
     const ctx = document.getElementById('equity-curve').getContext('2d');
+    const equityCurveData = results.equity_curve;
+    
+    // 转换数据格式
+    const chartData = Object.entries(equityCurveData).map(([date, value]) => ({
+        x: new Date(date),
+        y: value
+    }));
+
     new Chart(ctx, {
         type: 'line',
         data: {
-            labels: data.dates,
             datasets: [{
-                label: '策略收益',
-                data: data.values,
+                label: '策略收益率',
+                data: chartData,
                 borderColor: '#1890ff',
-                backgroundColor: 'rgba(24,144,255,0.1)',
-                fill: true,
-                tension: 0.4
+                borderWidth: 2,
+                fill: false
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            plugins: {
-                title: {
-                    display: true,
-                    text: '策略收益曲线'
-                }
-            },
             scales: {
                 x: {
                     type: 'time',
                     time: {
-                        unit: 'month'
+                        unit: 'month',
+                        displayFormats: {
+                            month: 'yyyy-MM'
+                        }
+                    },
+                    title: {
+                        display: true,
+                        text: '日期'
                     }
                 },
                 y: {
+                    beginAtZero: true,
                     title: {
                         display: true,
-                        text: '收益率(%)'
+                        text: '收益率'
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            return (value * 100).toFixed(2) + '%';
+                        }
+                    }
+                }
+            },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `收益率: ${(context.parsed.y * 100).toFixed(2)}%`;
+                        }
                     }
                 }
             }
@@ -355,7 +440,22 @@ function displayOptimizationResults(data) {
 // 客服功能
 function toggleCustomerService() {
     const chatWindow = document.querySelector('.cs-chat-window');
-    chatWindow.style.display = chatWindow.style.display === 'none' ? 'block' : 'none';
+    if (chatWindow.style.display === 'none' || !chatWindow.style.display) {
+        chatWindow.style.display = 'flex';
+        // 添加欢迎消息
+        if (!document.querySelector('.cs-message')) {
+            const messagesDiv = document.getElementById('csMessages');
+            messagesDiv.innerHTML = `
+                <div class="cs-message service">
+                    <div class="message-content">
+                        您好！我是您的专属客服，很高兴为您服务。请问有什么可以帮助您的吗？
+                    </div>
+                </div>
+            `;
+        }
+    } else {
+        chatWindow.style.display = 'none';
+    }
 }
 
 function sendCustomerMessage() {
@@ -364,24 +464,42 @@ function sendCustomerMessage() {
     if (!message) return;
 
     const messagesDiv = document.getElementById('csMessages');
+    
+    // 添加用户消息
     messagesDiv.innerHTML += `
         <div class="cs-message user">
             <div class="message-content">${message}</div>
         </div>
     `;
 
-    // 模拟客服回复
+    // 自动回复
     setTimeout(() => {
+        const responses = [
+            "感谢您的咨询，我正在为您处理...",
+            "您的问题我已经收到，请稍等片刻...",
+            "我明白您的需求，让我为您找到最佳解决方案...",
+            "这是一个很好的问题，我来为您详细解答..."
+        ];
+        const randomResponse = responses[Math.floor(Math.random() * responses.length)];
+        
         messagesDiv.innerHTML += `
             <div class="cs-message service">
-                <div class="message-content">感谢您的咨询，我们的客服人员将尽快回复您。</div>
+                <div class="message-content">${randomResponse}</div>
             </div>
         `;
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
     }, 1000);
 
     input.value = '';
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
 }
+
+// 添加回车发送功能
+document.getElementById('csInput').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        sendCustomerMessage();
+    }
+});
 
 // 工具函数
 function showLoading(message) {
@@ -405,4 +523,41 @@ function hideLoading() {
 
 function showError(message) {
     alert(message);
+}
+
+// 在登录成功的回调函数中添加
+function handleLoginSuccess(data) {
+    if (data.success) {
+        // 隐藏登录模态框
+        const loginModal = bootstrap.Modal.getInstance(document.getElementById('loginModal'));
+        loginModal.hide();
+        
+        // 更新界面显示
+        document.getElementById('guest-nav').style.display = 'none';
+        document.getElementById('user-nav').style.display = 'flex !important';
+        document.getElementById('username-display').textContent = data.user.username;
+        
+        // 保存用户信息
+        localStorage.setItem('username', data.user.username);
+    } else {
+        alert(data.error || '登录失败');
+    }
+}
+
+// 检查登录状态
+function checkLoginStatus() {
+    const username = localStorage.getItem('username');
+    if (username) {
+        document.getElementById('guest-nav').style.display = 'none';
+        document.getElementById('user-nav').style.display = 'flex !important';
+        document.getElementById('username-display').textContent = username;
+    }
+}
+
+// 退出登录
+function logout() {
+    localStorage.removeItem('username');
+    document.getElementById('guest-nav').style.display = 'flex';
+    document.getElementById('user-nav').style.display = 'none';
+    window.location.reload();
 }

@@ -17,22 +17,40 @@ class DatabaseManager:
 
     def create_schema(self):
         """创建所需的schema"""
-        schemas = [
-            'feature_engineering',  # 特征工程
-            'forex_data',          # 外汇数据
-            'macro_data',          # 宏观数据
-            'backtest_signals',    # 回测信号
-            'multi_risk',          # 多货币风险
-            'users'               # 添加用户schema
-        ]
-        
-        for schema in schemas:
-            self.cur.execute(f"""
-                DROP SCHEMA IF EXISTS {schema} CASCADE;
-                CREATE SCHEMA {schema};
+        try:
+            # 检查并创建users schema
+            self.cur.execute("""
+                DO $$ 
+                BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'users') THEN
+                        CREATE SCHEMA users;
+                    END IF;
+                END $$;
             """)
-        self.conn.commit()
-        print("所有Schema已重新创建")
+            self.conn.commit()
+            
+            # 创建用户表 - 修改密码字段长度
+            self.cur.execute("""
+                DROP TABLE IF EXISTS users.account CASCADE;
+                CREATE TABLE users.account (
+                    user_id SERIAL PRIMARY KEY,
+                    username VARCHAR(50) UNIQUE NOT NULL,
+                    password VARCHAR(255) NOT NULL,  -- 增加密码字段长度
+                    email VARCHAR(100) UNIQUE NOT NULL,
+                    balance DECIMAL(10,2) DEFAULT 0.00,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_login TIMESTAMP,
+                    status VARCHAR(20) DEFAULT 'active'
+                );
+            """)
+            self.conn.commit()
+            print("Schema和用户表创建成功")
+            return True
+            
+        except Exception as e:
+            print(f"创建Schema失败: {str(e)}")
+            self.conn.rollback()
+            return False
 
     def create_tables(self):
         """创建所需的表"""
@@ -41,17 +59,6 @@ class DatabaseManager:
         
         # 创建用户表
         self.cur.execute("""
-            CREATE TABLE IF NOT EXISTS users.account (
-                user_id SERIAL PRIMARY KEY,
-                username VARCHAR(50) UNIQUE NOT NULL,
-                password VARCHAR(100) NOT NULL,
-                email VARCHAR(100) UNIQUE NOT NULL,
-                balance DECIMAL(10,2) DEFAULT 0.00,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                last_login TIMESTAMP,
-                status VARCHAR(20) DEFAULT 'active'
-            );
-            
             CREATE TABLE IF NOT EXISTS users.transactions (
                 transaction_id SERIAL PRIMARY KEY,
                 user_id INTEGER REFERENCES users.account(user_id),
@@ -251,6 +258,52 @@ class DatabaseManager:
         except Exception as e:
             print(f"导入过程中发生错误: {str(e)}")
             self.conn.rollback()
+
+    def register_user(self, username, password, email):
+        """注册新用户"""
+        try:
+            # 检查用户名是否存在
+            self.cur.execute("SELECT username FROM users.account WHERE username = %s", (username,))
+            if self.cur.fetchone():
+                return False, "用户名已存在"
+            
+            # 检查邮箱是否存在
+            self.cur.execute("SELECT email FROM users.account WHERE email = %s", (email,))
+            if self.cur.fetchone():
+                return False, "邮箱已被注册"
+            
+            # 插入新用户
+            self.cur.execute("""
+                INSERT INTO users.account (username, password, email)
+                VALUES (%s, %s, %s)
+                RETURNING user_id
+            """, (username, password, email))
+            
+            user_id = self.cur.fetchone()[0]
+            self.conn.commit()
+            
+            return True, user_id
+            
+        except Exception as e:
+            self.conn.rollback()
+            return False, str(e)
+
+    def verify_user(self, username, password):
+        """验证用户登录"""
+        try:
+            self.cur.execute("""
+                SELECT user_id, password 
+                FROM users.account 
+                WHERE username = %s
+            """, (username,))
+            
+            result = self.cur.fetchone()
+            if result and result[1] == password:
+                return True, result[0]
+            return False, "用户名或密码错误"
+            
+        except Exception as e:
+            return False, str(e)
 
     def close(self):
         self.cur.close()

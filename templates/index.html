@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="/static/style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
 </head>
 <body>
     <!-- 导航栏 -->
@@ -29,8 +30,27 @@
                     </li>
                 </ul>
                 <div class="nav-right">
-                    <button id="rechargeBtn" class="btn btn-outline-light me-2">充值</button>
-                    <button id="loginBtn" class="btn btn-outline-light">登录</button>
+                    <!-- 未登录状态 -->
+                    <div id="guest-nav" class="d-flex">
+                        <button id="rechargeBtn" class="btn btn-outline-light me-2">充值</button>
+                        <button id="loginBtn" class="btn btn-outline-light">登录</button>
+                    </div>
+                    
+                    <!-- 登录状态 -->
+                    <div id="user-nav" class="d-flex align-items-center" style="display: none !important;">
+                        <div class="dropdown">
+                            <button class="btn btn-link text-light dropdown-toggle d-flex align-items-center" type="button" id="userDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="fas fa-user-circle me-2" style="font-size: 1.5rem;"></i>
+                                <span id="username-display"></span>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+                                <li><a class="dropdown-item" href="#"><i class="fas fa-user me-2"></i>个人中心</a></li>
+                                <li><a class="dropdown-item" href="#"><i class="fas fa-cog me-2"></i>设置</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="#" onclick="logout()"><i class="fas fa-sign-out-alt me-2"></i>退出登录</a></li>
+                            </ul>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -216,13 +236,13 @@
 
     <!-- 客服面板 -->
     <div class="cs-panel">
-        <button class="cs-button" onclick="toggleCustomerService()">
+        <button class="cs-button">
             <i class="fas fa-headset"></i>
         </button>
-        <div class="cs-chat-window" style="display: none;">
+        <div class="cs-chat-window">
             <div class="cs-header">
                 <h5>在线客服</h5>
-                <button class="cs-close" onclick="toggleCustomerService()">×</button>
+                <button class="cs-close">×</button>
             </div>
             <div class="cs-messages" id="csMessages"></div>
             <div class="cs-input">
@@ -235,7 +255,8 @@
     <!-- 脚本引入 -->
     <script src="/static/lib/bootstrap/js/bootstrap.bundle.min.js"></script>
     <script src="/static/lib/flatpickr/flatpickr.min.js"></script>
-    <script src="/static/lib/chart.js/chart.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
     <script src="/static/script.js"></script>
 </body>
 </html>
