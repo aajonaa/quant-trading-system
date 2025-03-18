@@ -1,3 +1,11 @@
+:root {
+    --primary-color: #1a237e;
+    --secondary-color: #0d47a1;
+    --accent-color: #2962ff;
+    --background-color: #f5f7fa;
+    --text-color: #333;
+}
+
 /* 自定义样式 */
 body.bg-gradient {
     background: linear-gradient(135deg, #f5f7fa, #c3cfe2);
@@ -110,13 +118,30 @@ h1 {
 /* 添加图表样式 */
 .chart-container {
     position: relative;
-    height: 300px;
+    height: 0;
+    padding-bottom: 56.25%; /* 16:9 比例 */
     margin-bottom: 1rem;
 }
 
-canvas {
+.chart-container canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
     width: 100% !important;
-    height: 400px !important;
+    height: 100% !important;
+}
+
+/* 优化结果展示区域 */
+.results-container {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.results-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
 }
 
 .card {
@@ -1005,22 +1030,15 @@ canvas {
 }
 
 .cs-button {
-    width: 60px;
-    height: 60px;
-    border-radius: 50%;
-    background-color: var(--primary-color);
+    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
     color: white;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-size: 24px;
-    cursor: pointer;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-    transition: transform 0.2s ease;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
 .cs-button:hover {
-    transform: scale(1.1);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.3);
 }
 
 .cs-panel {
@@ -1150,15 +1168,6 @@ canvas {
     }
 }
 
-/* 添加主题色变量 */
-:root {
-    --primary-color: #1a237e;
-    --secondary-color: #0d47a1;
-    --accent-color: #2962ff;
-    --background-color: #f5f7fa;
-    --text-color: #333;
-}
-
 /* 优化整体布局 */
 body {
     background-color: var(--background-color);
@@ -1169,7 +1178,7 @@ body {
 /* 优化导航栏样式 */
 .navbar {
     background-color: var(--primary-color);
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    padding: 1rem 0;
 }
 
 /* 优化卡片样式 */
@@ -1182,4 +1191,134 @@ body {
 
 .card:hover {
     transform: translateY(-2px);
+}
+
+/* 修复卡片样式 */
+.feature-card {
+    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+    color: white;
+    border: none;
+    padding: 2rem;
+}
+
+.feature-card i {
+    font-size: 3rem;
+    margin-bottom: 1.5rem;
+    color: white;
+}
+
+/* 修复按钮样式 */
+.btn-outline-light {
+    border: 2px solid white;
+    color: white;
+    background: transparent;
+    transition: all 0.3s ease;
+}
+
+.btn-outline-light:hover {
+    background: white;
+    color: var(--primary-color);
+}
+
+/* 修复客服按钮样式 */
+.cs-button {
+    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+    color: white;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.cs-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+}
+
+/* 功能卡片样式 */
+.feature-card {
+    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+    color: white;
+    border-radius: 10px;
+    padding: 2rem;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.feature-card i {
+    font-size: 3rem;
+    margin-bottom: 1.5rem;
+    color: white;
+}
+
+/* 分析图片容器样式 */
+.analysis-image-container {
+    width: 100%;
+    max-height: 500px;
+    overflow: hidden;
+    border-radius: 8px;
+    margin: 1rem 0;
+}
+
+.analysis-image {
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+}
+
+/* 结果展示区域样式 */
+.results-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 1rem;
+}
+
+/* 表格样式优化 */
+.table-responsive {
+    margin-top: 1rem;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.table th {
+    background-color: var(--primary-color);
+    color: white;
+    font-weight: 500;
+}
+
+.table td {
+    vertical-align: middle;
+}
+
+/* 优化按钮样式 */
+.btn-outline-light {
+    border: 2px solid white;
+    color: white;
+    background: transparent;
+    transition: all 0.3s ease;
+}
+
+.btn-outline-light:hover {
+    background: white;
+    color: var(--primary-color);
+}
+
+/* 客服按钮样式 */
+.cs-button {
+    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+    color: white;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.cs-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.3);
 }

@@ -5,15 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>拨云见策 - 专业量化交易分析平台</title>
     <!-- 引入Bootstrap CSS -->
-    <link href="{{ url_for('static', filename='lib/bootstrap.min.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='lib/bootstrap/css/bootstrap.min.css') }}" rel="stylesheet">
     <!-- 引入Font Awesome -->
     <link href="{{ url_for('static', filename='lib/fontawesome/css/all.min.css') }}" rel="stylesheet">
     <!-- 引入Flatpickr日期选择器 -->
     <link href="{{ url_for('static', filename='lib/flatpickr/flatpickr.min.css') }}" rel="stylesheet">
     <!-- 引入Chart.js -->
-    <script src="{{ url_for('static', filename='lib/chart.js') }}"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <!-- 如果需要使用时间轴插件 -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     <!-- 引入自定义CSS -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="{{ url_for('static', filename='style.css') }}" rel="stylesheet">
 </head>
 <body>
     <!-- 导航栏 -->
@@ -403,7 +405,7 @@
     </div>
 
     <!-- 引入JavaScript库 -->
-    <script src="{{ url_for('static', filename='lib/bootstrap.bundle.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='lib/bootstrap/js/bootstrap.bundle.min.js') }}"></script>
     <script src="{{ url_for('static', filename='lib/flatpickr/flatpickr.min.js') }}"></script>
     <script src="{{ url_for('static', filename='lib/flatpickr/zh.js') }}"></script>
     <!-- 引入自定义JavaScript -->

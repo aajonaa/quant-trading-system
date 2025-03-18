@@ -3,7 +3,9 @@ document.addEventListener('DOMContentLoaded', function() {
     flatpickr(".datepicker", {
         dateFormat: "Y-m-d",
         locale: "zh",
-        defaultDate: new Date()
+        minDate: "2015-01-18",
+        maxDate: "today",
+        defaultDate: "2015-01-18"
     });
 
     // 初始化参数滑块值显示
@@ -137,501 +139,175 @@ function showPage(pageName) {
     }
 }
 
-// 运行回测
+// 回测功能
 function runBacktest() {
-    const currency = document.getElementById('currency').value;
+    const currency = document.getElementById('backtestCurrency').value;
     const startDate = document.getElementById('startDate').value;
     const endDate = document.getElementById('endDate').value;
 
-    if (!currency || !startDate || !endDate) {
-        alert('请填写完整的回测参数');
+    // 验证日期范围
+    const minDate = new Date('2015-01-18');
+    const maxDate = new Date();
+    const selectedStart = new Date(startDate);
+    const selectedEnd = new Date(endDate);
+
+    if (selectedStart < minDate || selectedEnd > maxDate) {
+        alert('请选择2015-01-18至今天之间的日期范围');
         return;
     }
 
-    // 显示加载动画
     document.getElementById('loading').style.display = 'flex';
 
-    // 准备表单数据
-    const formData = new FormData();
-    formData.append('currency', currency);
-    formData.append('start_date', startDate);
-    formData.append('end_date', endDate);
-
-    // 发送请求
     fetch('/api/backtest', {
         method: 'POST',
-        body: formData
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `currency=${currency}&start_date=${startDate}&end_date=${endDate}`
     })
     .then(response => response.json())
     .then(data => {
-        // 隐藏加载动画
-        document.getElementById('loading').style.display = 'none';
-
         if (data.error) {
-            alert('回测失败: ' + data.error);
-            return;
+            throw new Error(data.error);
         }
 
         // 显示回测结果
-        displayBacktestResults(data);
-    })
-    .catch(error => {
-        document.getElementById('loading').style.display = 'none';
-        alert('请求失败: ' + error);
-    });
-}
-
-// 显示回测结果
-function displayBacktestResults(data) {
-    const resultsContainer = document.getElementById('backtestResults');
-    resultsContainer.style.display = 'block';
-    resultsContainer.innerHTML = '';
-
-    // 创建权益曲线图
-    const equityCurveCard = document.createElement('div');
-    equityCurveCard.className = 'chart-container';
-    equityCurveCard.innerHTML = `
-        <h3 class="chart-title">${data.currency} 权益曲线</h3>
-        <canvas id="equityCurveChart"></canvas>
-    `;
-    resultsContainer.appendChild(equityCurveCard);
-
-    // 创建回测指标卡片
-    const metricsCard = document.createElement('div');
-    metricsCard.className = 'card mb-4';
-    metricsCard.innerHTML = `
-        <div class="card-body">
-            <h3 class="card-title">回测指标</h3>
+        const resultsContainer = document.getElementById('backtestResults');
+        resultsContainer.innerHTML = `
             <div class="row">
-                <div class="col-md-3 col-sm-6 mb-3">
-                    <div class="metric-card">
-                        <div class="metric-title">总收益率</div>
-                        <div class="metric-value ${data.metrics.total_return >= 0 ? 'positive' : 'negative'}">
-                            ${(data.metrics.total_return * 100).toFixed(2)}%
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3 col-sm-6 mb-3">
-                    <div class="metric-card">
-                        <div class="metric-title">年化收益率</div>
-                        <div class="metric-value ${data.metrics.annual_return >= 0 ? 'positive' : 'negative'}">
-                            ${(data.metrics.annual_return * 100).toFixed(2)}%
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3 col-sm-6 mb-3">
-                    <div class="metric-card">
-                        <div class="metric-title">最大回撤</div>
-                        <div class="metric-value negative">
-                            ${(data.metrics.max_drawdown * 100).toFixed(2)}%
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3 col-sm-6 mb-3">
-                    <div class="metric-card">
-                        <div class="metric-title">夏普比率</div>
-                        <div class="metric-value ${data.metrics.sharpe_ratio >= 0 ? 'positive' : 'negative'}">
-                            ${data.metrics.sharpe_ratio.toFixed(2)}
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3 col-sm-6 mb-3">
-                    <div class="metric-card">
-                        <div class="metric-title">胜率</div>
-                        <div class="metric-value">
-                            ${(data.metrics.win_rate * 100).toFixed(2)}%
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3 col-sm-6 mb-3">
-                    <div class="metric-card">
-                        <div class="metric-title">盈亏比</div>
-                        <div class="metric-value">
-                            ${data.metrics.profit_factor.toFixed(2)}
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3 col-sm-6 mb-3">
-                    <div class="metric-card">
-                        <div class="metric-title">平均收益</div>
-                        <div class="metric-value ${data.metrics.avg_trade >= 0 ? 'positive' : 'negative'}">
-                            ${(data.metrics.avg_trade * 100).toFixed(2)}%
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3 col-sm-6 mb-3">
-                    <div class="metric-card">
-                        <div class="metric-title">最大连续亏损</div>
-                        <div class="metric-value">
-                            ${data.metrics.max_consecutive_losses}
+                <div class="col-12">
+                    <div class="card mb-4">
+                        <div class="card-body">
+                            <h5 class="card-title">回测结果 - ${currency}</h5>
+                            <img src="/static/images/${currency}_analysis.png" class="img-fluid mb-3" alt="回测分析图">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <p>总收益率: ${data.metrics.total_return}%</p>
+                                    <p>Sharpe比率: ${data.metrics.sharpe_ratio}</p>
+                                    <p>Sortino比率: ${data.metrics.sortino_ratio}</p>
+                                    <p>最大回撤: ${data.metrics.max_drawdown}%</p>
+                                </div>
+                                <div class="col-md-6">
+                                    <p>胜率: ${data.metrics.win_rate}%</p>
+                                    <p>盈亏比: ${data.metrics.profit_factor}</p>
+                                    <p>平均收益: ${data.metrics.avg_return}%</p>
+                                    <p>最大连续亏损: ${data.metrics.max_consecutive_losses}</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
-    `;
-    resultsContainer.appendChild(metricsCard);
-
-    // 创建交易信号图
-    const signalChartCard = document.createElement('div');
-    signalChartCard.className = 'chart-container';
-    signalChartCard.innerHTML = `
-        <h3 class="chart-title">${data.currency} 交易信号</h3>
-        <canvas id="signalChart"></canvas>
-    `;
-    resultsContainer.appendChild(signalChartCard);
-
-    // 初始化权益曲线图
-    initEquityCurveChart(data.equity_curve);
-
-    // 初始化交易信号图
-    initSignalChart(data.price_data, data.signals);
-}
-
-// 初始化权益曲线图
-function initEquityCurveChart(equityCurve) {
-    const ctx = document.getElementById('equityCurveChart').getContext('2d');
-
-    new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: equityCurve.dates,
-            datasets: [{
-                label: '账户权益',
-                data: equityCurve.values,
-                borderColor: '#3498db',
-                backgroundColor: 'rgba(52, 152, 219, 0.1)',
-                borderWidth: 2,
-                fill: true,
-                tension: 0.1
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    display: true,
-                    position: 'top'
-                },
-                tooltip: {
-                    mode: 'index',
-                    intersect: false
-                }
-            },
-            scales: {
-                x: {
-                    type: 'time',
-                    time: {
-                        unit: 'month',
-                        displayFormats: {
-                            month: 'yyyy-MM'
-                        }
-                    },
-                    title: {
-                        display: true,
-                        text: '日期'
-                    }
-                },
-                y: {
-                    title: {
-                        display: true,
-                        text: '账户权益'
-                    }
-                }
-            }
-        }
+        `;
+    })
+    .catch(error => {
+        alert('回测请求失败: ' + error);
+    })
+    .finally(() => {
+        document.getElementById('loading').style.display = 'none';
     });
 }
 
-// 初始化交易信号图
-function initSignalChart(priceData, signals) {
-    const ctx = document.getElementById('signalChart').getContext('2d');
-
-    // 准备买入和卖出信号数据
-    const buySignals = [];
-    const sellSignals = [];
-
-    for (let i = 0; i < signals.length; i++) {
-        if (signals[i] === 1) {
-            buySignals.push({
-                x: priceData.dates[i],
-                y: priceData.prices[i]
-            });
-            sellSignals.push(null);
-        } else if (signals[i] === -1) {
-            sellSignals.push({
-                x: priceData.dates[i],
-                y: priceData.prices[i]
-            });
-            buySignals.push(null);
-        } else {
-            buySignals.push(null);
-            sellSignals.push(null);
-        }
-    }
-
-    new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: priceData.dates,
-            datasets: [
-                {
-                    label: '价格',
-                    data: priceData.prices,
-                    borderColor: '#7f8c8d',
-                    backgroundColor: 'rgba(127, 140, 141, 0.1)',
-                    borderWidth: 1,
-                    fill: false,
-                    tension: 0.1
-                },
-                {
-                    label: '买入信号',
-                    data: buySignals,
-                    borderColor: '#2ecc71',
-                    backgroundColor: '#2ecc71',
-                    pointRadius: 6,
-                    pointHoverRadius: 8,
-                    showLine: false
-                },
-                {
-                    label: '卖出信号',
-                    data: sellSignals,
-                    borderColor: '#e74c3c',
-                    backgroundColor: '#e74c3c',
-                    pointRadius: 6,
-                    pointHoverRadius: 8,
-                    showLine: false
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    display: true,
-                    position: 'top'
-                },
-                tooltip: {
-                    mode: 'index',
-                    intersect: false
-                }
-            },
-            scales: {
-                x: {
-                    type: 'time',
-                    time: {
-                        unit: 'month',
-                        displayFormats: {
-                            month: 'yyyy-MM'
-                        }
-                    },
-                    title: {
-                        display: true,
-                        text: '日期'
-                    }
-                },
-                y: {
-                    title: {
-                        display: true,
-                        text: '价格'
-                    }
-                }
-            }
-        }
-    });
-}
-
-// 运行风险分析
+// 风险分析功能
 function runRiskAnalysis() {
-    // 获取选中的货币对
-    const selectedCurrencies = [];
-    document.querySelectorAll('input[name="currencies"]:checked').forEach(function(checkbox) {
-        selectedCurrencies.push(checkbox.value);
-    });
-
-    if (selectedCurrencies.length < 2) {
+    const selectedPairs = Array.from(document.querySelectorAll('input[name="currencies"]:checked'))
+        .map(input => input.value);
+    
+    if (selectedPairs.length < 2) {
         alert('请至少选择两个货币对进行分析');
         return;
     }
 
-    const analysisType = document.getElementById('analysisType').value;
-
-    // 显示加载动画
+    const analysisType = document.querySelector('input[name="analysisType"]:checked').value;
+    
     document.getElementById('loading').style.display = 'flex';
 
-    // 准备表单数据
-    const formData = new FormData();
-    formData.append('currencies', JSON.stringify(selectedCurrencies));
-    formData.append('analysis_type', analysisType);
-
-    // 发送请求
     fetch('/api/risk_analysis', {
         method: 'POST',
-        body: formData
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `pairs=${selectedPairs.join(',')}&type=${analysisType}`
     })
     .then(response => response.json())
     .then(data => {
-        // 隐藏加载动画
-        document.getElementById('loading').style.display = 'none';
+        const resultsContainer = document.getElementById('riskResults');
+        let html = '';
 
-        if (data.error) {
-            alert('风险分析失败: ' + data.error);
-            return;
+        switch(analysisType) {
+            case 'correlation':
+                html = `
+                    <div class="card mb-4">
+                        <div class="card-body">
+                            <h5 class="card-title">相关性分析</h5>
+                            <img src="/static/images/correlation_heatmap.png" class="img-fluid" alt="相关性热图">
+                        </div>
+                    </div>
+                `;
+                break;
+            case 'risk':
+                html = `
+                    <div class="card mb-4">
+                        <div class="card-body">
+                            <h5 class="card-title">风险评估</h5>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <img src="/static/images/risk_heatmap.png" class="img-fluid mb-3" alt="风险热图">
+                                </div>
+                                <div class="col-md-6">
+                                    <img src="/static/images/risk_timeseries.png" class="img-fluid mb-3" alt="风险时间序列">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                break;
+            case 'comprehensive':
+                html = `
+                    <div class="card mb-4">
+                        <div class="card-body">
+                            <h5 class="card-title">综合分析结果</h5>
+                            <div class="table-responsive">
+                                <table class="table table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>货币对组合</th>
+                                            <th>相关系数</th>
+                                            <th>组合波动率</th>
+                                            <th>风险得分</th>
+                                            <th>风险等级</th>
+                                            <th>交易建议</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${data.results.filter(r => selectedPairs.includes(r.pair))
+                                            .map(risk => `
+                                            <tr>
+                                                <td>${risk.pair}</td>
+                                                <td>${risk.correlation}</td>
+                                                <td>${risk.volatility}</td>
+                                                <td>${risk.risk_score}</td>
+                                                <td>${risk.risk_level}</td>
+                                                <td>${risk.recommendation}</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                break;
         }
 
-        // 显示风险分析结果
-        displayRiskResults(data);
+        resultsContainer.innerHTML = html;
+        resultsContainer.style.display = 'block';
     })
     .catch(error => {
+        alert('风险分析请求失败: ' + error);
+    })
+    .finally(() => {
         document.getElementById('loading').style.display = 'none';
-        alert('请求失败: ' + error);
-    });
-}
-
-// 显示风险分析结果
-function displayRiskResults(data) {
-    const resultsContainer = document.getElementById('riskResults');
-    resultsContainer.style.display = 'block';
-    resultsContainer.innerHTML = '';
-
-    // 创建相关性热图
-    const correlationCard = document.createElement('div');
-    correlationCard.className = 'chart-container';
-    correlationCard.innerHTML = `
-        <h3 class="chart-title">货币对相关性热图</h3>
-        <canvas id="correlationHeatmap"></canvas>
-    `;
-    resultsContainer.appendChild(correlationCard);
-
-    // 创建风险指标表格
-    const riskTableCard = document.createElement('div');
-    riskTableCard.className = 'table-container';
-    riskTableCard.innerHTML = `
-        <h3 class="chart-title">货币对组合风险分析</h3>
-        <div class="table-responsive">
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th>货币对组合</th>
-                        <th>相关系数</th>
-                        <th>组合波动率</th>
-                        <th>风险得分</th>
-                        <th>风险等级</th>
-                        <th>交易建议</th>
-                    </tr>
-                </thead>
-                <tbody id="riskTableBody">
-                </tbody>
-            </table>
-        </div>
-    `;
-    resultsContainer.appendChild(riskTableCard);
-
-    // 填充风险表格数据
-    const tableBody = document.getElementById('riskTableBody');
-    data.pair_risks.forEach(risk => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${risk.pair}</td>
-            <td>${risk.correlation.toFixed(4)}</td>
-            <td>${risk.volatility.toFixed(4)}</td>
-            <td>${risk.risk_score.toFixed(2)}</td>
-            <td>${risk.risk_level}</td>
-            <td>${risk.recommendation}</td>
-        `;
-        tableBody.appendChild(row);
-    });
-
-    // 初始化相关性热图
-    initCorrelationHeatmap(data.correlation_matrix);
-}
-
-// 初始化相关性热图
-function initCorrelationHeatmap(correlationMatrix) {
-    const ctx = document.getElementById('correlationHeatmap').getContext('2d');
-
-    // 准备热图数据
-    const labels = Object.keys(correlationMatrix);
-    const data = [];
-
-    for (let i = 0; i < labels.length; i++) {
-        for (let j = 0; j < labels.length; j++) {
-            data.push({
-                x: j,
-                y: i,
-                v: correlationMatrix[labels[i]][labels[j]]
-            });
-        }
-    }
-
-    new Chart(ctx, {
-        type: 'matrix',
-        data: {
-            datasets: [{
-                label: '相关系数',
-                data: data,
-                backgroundColor(context) {
-                    const value = context.dataset.data[context.dataIndex].v;
-
-                    if (value >= 0.7) return 'rgba(231, 76, 60, 0.8)';  // 高正相关 - 红色
-                    if (value >= 0.3) return 'rgba(230, 126, 34, 0.8)';  // 中正相关 - 橙色
-                    if (value >= 0) return 'rgba(241, 196, 15, 0.8)';    // 低正相关 - 黄色
-                    if (value >= -0.3) return 'rgba(46, 204, 113, 0.8)';  // 低负相关 - 绿色
-                    if (value >= -0.7) return 'rgba(52, 152, 219, 0.8)';  // 中负相关 - 蓝色
-                    return 'rgba(155, 89, 182, 0.8)';                    // 高负相关 - 紫色
-                },
-                borderWidth: 1,
-                borderColor: 'rgba(0, 0, 0, 0.1)'
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                tooltip: {
-                    callbacks: {
-                        title() {
-                            return '';
-                        },
-                        label(context) {
-                            const v = context.dataset.data[context.dataIndex];
-                            return [
-                                `${labels[v.y]} - ${labels[v.x]}`,
-                                `相关系数: ${v.v.toFixed(4)}`
-                            ];
-                        }
-                    }
-                },
-                legend: {
-                    display: false
-                }
-            },
-            scales: {
-                x: {
-                    type: 'category',
-                    labels: labels,
-                    ticks: {
-                        display: true
-                    },
-                    grid: {
-                        display: false
-                    }
-                },
-                y: {
-                    type: 'category',
-                    labels: labels,
-                    offset: true,
-                    ticks: {
-                        display: true
-                    },
-                    grid: {
-                        display: false
-                    }
-                }
-            }
-        }
     });
 }
 
