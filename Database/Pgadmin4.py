@@ -52,7 +52,6 @@ class DatabaseManager:
                 high FLOAT,
                 low FLOAT,
                 close FLOAT,
-                volume FLOAT,
                 PRIMARY KEY (date, currency_pair)
             );
         """)
