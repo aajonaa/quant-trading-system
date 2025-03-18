@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, jsonify, session
-
+from backend.backtest.backtest_optimum import BacktestOptimizer
 from pathlib import Path
 import logging
 import sys
@@ -122,104 +122,28 @@ def risk_analysis():
     except Exception as e:
         return jsonify({'error': str(e)})
 
-@app.route('/api/optimize', methods=['POST'])
-def optimize():
+
+@app.route('/api/optimize_strategy', methods=['POST'])
+def optimize_strategy():
     try:
-        # 获取请求参数
-        currency = request.form.get('currency')
-        method = request.form.get('method')
-        target = request.form.get('target')
-        stop_loss = float(request.form.get('stop_loss', 0.02))
-        take_profit = float(request.form.get('take_profit', 0.04))
-        position_size = float(request.form.get('position_size', 0.5))
-        trailing_stop = float(request.form.get('trailing_stop', 0.015))
-        
-        if not currency:
-            return jsonify({'error': '请选择货币对'})
-        
-        # 创建回测器实例
-        backtester = ForexBacktester()
-        
-        # 加载数据
-        if not backtester.load_data():
-            return jsonify({'error': '加载数据失败'})
-        
-        # 执行原始回测
-        original_params = {
-            'stop_loss': stop_loss,
-            'take_profit': take_profit,
-            'position_size': position_size,
-            'trailing_stop': trailing_stop
-        }
-        
-        if not backtester.run_backtest(original_params):
-            return jsonify({'error': '原始回测执行失败'})
-        
-        # 获取原始回测结果
-        if currency not in backtester.backtest_results:
-            return jsonify({'error': f'未找到 {currency} 的回测结果'})
-        
-        original_result = backtester.backtest_results[currency]
-        
-        # 模拟优化过程
-        # 在实际应用中，这里应该实现真正的优化算法
-        optimized_params = {
-            'stop_loss': min(stop_loss * 0.8, 0.01),  # 减小止损
-            'take_profit': take_profit * 1.2,  # 增加止盈
-            'position_size': min(position_size * 1.1, 1.0),  # 增加仓位
-            'trailing_stop': trailing_stop * 1.1  # 增加追踪止损
-        }
-        
-        # 执行优化后的回测
-        if not backtester.run_backtest(optimized_params):
-            return jsonify({'error': '优化回测执行失败'})
-        
-        # 获取优化后的回测结果
-        optimized_result = backtester.backtest_results[currency]
-        
-        # 准备返回数据
-        # 转换日期格式
-        original_dates = [d.strftime('%Y-%m-%d') for d in original_result['equity_curve'].index]
-        original_values = original_result['equity_curve']['capital'].tolist()
-        
-        optimized_dates = [d.strftime('%Y-%m-%d') for d in optimized_result['equity_curve'].index]
-        optimized_values = optimized_result['equity_curve']['capital'].tolist()
-        
-        # 返回结果
-        return jsonify({
-            'currency': currency,
-            'method': method,
-            'target': target,
-            'best_params': optimized_params,
-            'before': {
-                'total_return': original_result['total_return'],
-                'annual_return': original_result['annual_return'],
-                'sharpe_ratio': original_result['sharpe_ratio'],
-                'max_drawdown': original_result['max_drawdown'],
-                'win_rate': original_result['win_rate']
-            },
-            'after': {
-                'total_return': optimized_result['total_return'],
-                'annual_return': optimized_result['annual_return'],
-                'sharpe_ratio': optimized_result['sharpe_ratio'],
-                'max_drawdown': optimized_result['max_drawdown'],
-                'win_rate': optimized_result['win_rate']
-            },
-            'before_equity': {
-                'dates': original_dates,
-                'values': original_values
-            },
-            'after_equity': {
-                'dates': optimized_dates,
-                'values': optimized_values
-            }
-        })
-        
+        data = request.get_json()
+        optimizer = BacktestOptimizer()
+
+        results = optimizer.optimize(
+            currency_pair=data['currency_pair'],
+            start_date=data['start_date'],
+            end_date=data['end_date'],
+            population_size=data.get('population_size', 50),
+            generations=data.get('generations', 30)
+        )
+
+        return jsonify(results)
+
     except Exception as e:
-        logger.error(f"优化API错误: {str(e)}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return jsonify({'error': f'服务器错误: {str(e)}'})
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
 
 @app.route('/api/apply_optimization', methods=['POST'])
 def apply_optimization():
@@ -340,7 +264,7 @@ def single_backtest():
         backtester = ForexBacktester()
         
         # 执行单一货币对回测
-        results = backtester.run_single_backtest(
+        results = backtester.run_backtest(
             currency_pair=currency_pair,
             start_date=start_date,
             end_date=end_date

@@ -3,9 +3,9 @@ document.addEventListener('DOMContentLoaded', function() {
     flatpickr(".datepicker", {
         dateFormat: "Y-m-d",
         locale: "zh",
-        minDate: "2015-01-18",
+        minDate: "2015-01-28",
         maxDate: "today",
-        defaultDate: "2015-01-18"
+        defaultDate: "2015-01-28"
     });
 
     // 初始化参数滑块值显示
@@ -146,13 +146,13 @@ function runBacktest() {
     const endDate = document.getElementById('endDate').value;
 
     // 验证日期范围
-    const minDate = new Date('2015-01-18');
+    const minDate = new Date('2015-01-28');
     const maxDate = new Date();
     const selectedStart = new Date(startDate);
     const selectedEnd = new Date(endDate);
 
     if (selectedStart < minDate || selectedEnd > maxDate) {
-        alert('请选择2015-01-18至今天之间的日期范围');
+        alert('请选择2015-01-28至今天之间的日期范围');
         return;
     }
 
