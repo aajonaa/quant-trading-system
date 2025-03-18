@@ -4,10 +4,11 @@ import logging
 from pathlib import Path
 from itertools import combinations
 from sklearn.preprocessing import StandardScaler
-from model_analysis import HybridForexModel
+from model_analysis import MultiStepPredictor
 import seaborn as sns
 import matplotlib.pyplot as plt
 from datetime import datetime
+import os
 
 class MultiCurrencyRiskAnalyzer:
     def __init__(self):
@@ -21,7 +22,7 @@ class MultiCurrencyRiskAnalyzer:
         self.risk_signals = None
         self.pair_combinations = []  # 存储货币对组合
         self.combination_signals = {}  # 存储组合风险信号
-        self.model = HybridForexModel()
+        self.model = MultiStepPredictor(lookback=10, horizons=[1, 3, 5, 10])
         self.scaler = StandardScaler()
         # 设置中文字体
         plt.rcParams['font.sans-serif'] = ['SimHei']
@@ -60,7 +61,7 @@ class MultiCurrencyRiskAnalyzer:
                         self.logger.info("日期列处理完成")
                     
                     # 检查必要的列
-                    required_columns = ['Close', 'Ensemble_Signal']
+                    required_columns = ['Price', 'Signal']
                     if not all(col in df.columns for col in required_columns):
                         missing_cols = [col for col in required_columns if col not in df.columns]
                         self.logger.error(f"{pair} 缺少必要的列: {missing_cols}")
@@ -95,7 +96,7 @@ class MultiCurrencyRiskAnalyzer:
             aligned_data = {}
             common_dates = None
             
-            # 获取所有Close数据并对齐日期
+            # 获取所有Price数据并对齐日期
             for pair, df in self.pairs_data.items():
                 dates = df.index
                 if common_dates is None:
@@ -108,7 +109,7 @@ class MultiCurrencyRiskAnalyzer:
             # 创建对齐后的收益率数据
             for pair, df in self.pairs_data.items():
                 aligned_df = df.loc[common_dates]
-                aligned_data[pair] = aligned_df['Close'].pct_change()
+                aligned_data[pair] = aligned_df['Price'].pct_change()
             
             # 计算相关系数矩阵
             returns_df = pd.DataFrame(aligned_data, index=common_dates)
@@ -176,15 +177,15 @@ class MultiCurrencyRiskAnalyzer:
                 corr = self.correlation_matrix.loc[pair1, pair2]
                 
                 # 计算组合风险指标
-                returns1 = df1['Close'].pct_change()
-                returns2 = df2['Close'].pct_change()
+                returns1 = df1['Price'].pct_change()
+                returns2 = df2['Price'].pct_change()
                 
                 # 计算组合波动率（年化）
                 combined_vol = (returns1 + returns2).std() * np.sqrt(252)
                 
                 # 计算信号一致性
                 signal_agreement = (
-                    (df1['Ensemble_Signal'] * df2['Ensemble_Signal']).mean()
+                    (df1['Signal'] * df2['Signal']).mean()
                 )
                 
                 # 计算风险得分 (0-100)
@@ -270,12 +271,12 @@ class MultiCurrencyRiskAnalyzer:
             
             # 计算风险指标
             for pair, df in self.pairs_data.items():
-                returns = df['Close'].pct_change()
+                returns = df['Price'].pct_change()
                 risk_data.loc[pair, '波动率'] = returns.std() * np.sqrt(252)  # 年化波动率
                 risk_data.loc[pair, '偏度'] = returns.skew()
                 risk_data.loc[pair, '峰度'] = returns.kurtosis()
-                risk_data.loc[pair, '最大回撤'] = (df['Close'] / df['Close'].expanding().max() - 1).min()
-                risk_data.loc[pair, '信号强度'] = abs(df['Ensemble_Signal']).mean()
+                risk_data.loc[pair, '最大回撤'] = (df['Price'] / df['Price'].expanding().max() - 1).min()
+                risk_data.loc[pair, '信号强度'] = abs(df['Signal']).mean()
             
             # 标准化风险指标
             risk_data = (risk_data - risk_data.mean()) / risk_data.std()
@@ -301,7 +302,7 @@ class MultiCurrencyRiskAnalyzer:
             plt.figure(figsize=(15, 8))
             for pair in self.pairs_data.keys():
                 df = self.pairs_data[pair]
-                risk = df['Close'].pct_change().rolling(20).std() * np.sqrt(252)
+                risk = df['Price'].pct_change().rolling(20).std() * np.sqrt(252)
                 plt.plot(df.index, risk, label=pair, alpha=0.7)
             
             plt.title('货币对风险时序变化')
@@ -334,7 +335,7 @@ class MultiCurrencyRiskAnalyzer:
             return None
 
     def analyze_currency_risks(self, data_dict):
-        """分析多个货币对的风险，使用ensemble_signal"""
+        """分析多个货币对的风险，使用signal"""
         try:
             results = {}
             for pair, data in data_dict.items():
@@ -344,9 +345,9 @@ class MultiCurrencyRiskAnalyzer:
                 data = data.replace([np.inf, -np.inf], np.nan)
                 data = data.ffill()  # 使用前值填充
                 
-                # 使用 Ensemble_Signal 作为基础信号
-                if 'Ensemble_Signal' in data.columns:
-                    signals = data['Ensemble_Signal']
+                # 使用 Signal 作为基础信号
+                if 'Signal' in data.columns:
+                    signals = data['Signal']
                     
                     # 计算风险指标
                     risk_metrics = {
@@ -372,7 +373,7 @@ class MultiCurrencyRiskAnalyzer:
                     # 输出风险评估结果
                     self._print_signal_assessment(pair, risk_metrics)
                 else:
-                    self.logger.error(f"{pair} 缺少 Ensemble_Signal 列")
+                    self.logger.error(f"{pair} 缺少 Signal 列")
                     continue
             
             return results
@@ -449,7 +450,7 @@ class MultiCurrencyRiskAnalyzer:
             # 提取所有货币对的收益率
             returns_dict = {}
             for pair, df in currency_data.items():
-                returns_dict[pair] = df['Close'].pct_change()
+                returns_dict[pair] = df['Price'].pct_change()
             
             returns_df = pd.DataFrame(returns_dict)
             
@@ -523,10 +524,10 @@ class MultiCurrencyRiskAnalyzer:
             
             # 计算每个货币对的风险指标
             for pair, df in currency_data.items():
-                risk_data.loc[pair, '波动率'] = df['Close'].pct_change().std() * np.sqrt(252)
-                risk_data.loc[pair, '偏度'] = df['Close'].pct_change().skew()
-                risk_data.loc[pair, '峰度'] = df['Close'].pct_change().kurtosis()
-                risk_data.loc[pair, '最大回撤'] = (df['Close'] / df['Close'].expanding().max() - 1).min()
+                risk_data.loc[pair, '波动率'] = df['Price'].pct_change().std() * np.sqrt(252)
+                risk_data.loc[pair, '偏度'] = df['Price'].pct_change().skew()
+                risk_data.loc[pair, '峰度'] = df['Price'].pct_change().kurtosis()
+                risk_data.loc[pair, '最大回撤'] = (df['Price'] / df['Price'].expanding().max() - 1).min()
             
             # 标准化风险指标
             risk_data = (risk_data - risk_data.mean()) / risk_data.std()
@@ -545,7 +546,7 @@ class MultiCurrencyRiskAnalyzer:
                 plt.savefig(output_path)
                 self.logger.info(f"热力图已保存至: {output_path}")
             
-            plt.close()
+            plt.Price()
             
             return risk_data
             
@@ -558,7 +559,7 @@ class MultiCurrencyRiskAnalyzer:
         try:
             # 1. 计算每个货币对的收益率
             for pair, df in currency_data.items():
-                df['returns'] = df['Close'].pct_change()
+                df['returns'] = df['Price'].pct_change()
             
             # 2. 计算风险信号
             risk_signals, correlations = self.calculate_risk_signals(currency_data)
@@ -586,8 +587,8 @@ class MultiCurrencyRiskAnalyzer:
                     'volatility': df['returns'].std() * np.sqrt(252),  # 年化波动率
                     'skewness': df['returns'].skew(),  # 偏度
                     'kurtosis': df['returns'].kurtosis(),  # 峰度
-                    'max_drawdown': (df['Close'] / df['Close'].expanding().max() - 1).min(),  # 最大回撤
-                    'signal_strength': abs(df['Ensemble_Signal']).mean()  # 信号强度
+                    'max_drawdown': (df['Price'] / df['Price'].expanding().max() - 1).min(),  # 最大回撤
+                    'signal_strength': abs(df['Signal']).mean()  # 信号强度
                 }
             
             return report
