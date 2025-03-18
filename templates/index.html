@@ -8,6 +8,8 @@
     <link rel="stylesheet" href="/static/lib/flatpickr/flatpickr.min.css">
     <link rel="stylesheet" href="/static/lib/fontawesome/css/all.min.css">
     <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
 </head>
 <body>
     <!-- 导航栏 -->
@@ -113,8 +115,29 @@
     </div>
 
     <!-- 登录模态框 -->
-    <div class="modal fade" id="loginModal">
-        <!-- 登录表单 -->
+    <div class="modal fade" id="loginModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">用户登录</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="loginForm">
+                        <div class="mb-3">
+                            <label class="form-label">用户名</label>
+                            <input type="text" class="form-control" id="username" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">密码</label>
+                            <input type="password" class="form-control" id="password" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">登录</button>
+                        <button type="button" class="btn btn-link" id="showRegister">注册账号</button>
+                    </form>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- 注册模态框 -->
@@ -123,8 +146,21 @@
     </div>
 
     <!-- 客服面板 -->
-    <div id="customer-service" class="cs-panel">
-        <!-- 客服内容 -->
+    <div class="cs-panel">
+        <button class="cs-button" onclick="toggleCustomerService()">
+            <i class="fas fa-headset"></i>
+        </button>
+        <div class="cs-chat-window" style="display: none;">
+            <div class="cs-header">
+                <h5>在线客服</h5>
+                <button class="cs-close" onclick="toggleCustomerService()">×</button>
+            </div>
+            <div class="cs-messages" id="csMessages"></div>
+            <div class="cs-input">
+                <input type="text" id="csInput" placeholder="请输入消息...">
+                <button onclick="sendCustomerMessage()">发送</button>
+            </div>
+        </div>
     </div>
 
     <!-- 脚本引入 -->

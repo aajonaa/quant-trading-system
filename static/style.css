@@ -1,104 +1,94 @@
 :root {
-    --primary-color: #2d8cf0;
-    --secondary-color: #2b85e4;
-    --bg-color: #f5f7f9;
-    --text-color: #515a6e;
-    --border-color: #dcdee2;
+    --primary-color: #1890ff;
+    --secondary-color: #096dd9;
+    --bg-color: #f0f2f5;
+    --text-color: #2c3e50;
+    --border-color: #e8e8e8;
+    --card-shadow: 0 2px 12px 0 rgba(0,0,0,.1);
 }
 
+/* 全局样式 */
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     color: var(--text-color);
     background-color: var(--bg-color);
+    line-height: 1.5;
 }
 
 /* 导航栏样式 */
 .navbar {
-    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+    background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
     padding: 1rem 0;
+    box-shadow: 0 2px 8px rgba(0,0,0,.1);
 }
 
-.navbar-brand img {
-    height: 40px;
+.navbar-brand {
+    color: #fff;
+    font-weight: 500;
+    font-size: 1.25rem;
 }
 
-/* 主要内容区样式 */
+.nav-link {
+    color: rgba(255,255,255,.85) !important;
+    padding: 0.5rem 1rem;
+    transition: color 0.3s;
+}
+
+.nav-link:hover, .nav-link.active {
+    color: #fff !important;
+}
+
+/* 内容区样式 */
 .section {
-    padding: 4rem 0;
+    padding: 3rem 0;
 }
 
 .section-header {
     text-align: center;
-    margin-bottom: 3rem;
+    margin-bottom: 2.5rem;
 }
 
 .section-header h2 {
-    color: var(--primary-color);
-    font-weight: 500;
-    margin-bottom: 1rem;
-}
-
-/* 回测面板样式 */
-.backtest-panel {
-    background: #fff;
-    border-radius: 8px;
-    box-shadow: 0 2px 12px 0 rgba(0,0,0,.1);
-    padding: 1.5rem;
-}
-
-.params-card {
-    background: #fff;
-    padding: 1.5rem;
-    border-radius: 6px;
-    box-shadow: 0 1px 4px rgba(0,0,0,.1);
-}
-
-.results-card {
-    background: #fff;
-    padding: 1.5rem;
-    border-radius: 6px;
-    box-shadow: 0 1px 4px rgba(0,0,0,.1);
-}
-
-/* 指标卡片样式 */
-.metrics-row {
-    margin-bottom: 2rem;
-}
-
-.metric-card {
-    text-align: center;
-    padding: 1rem;
-    background: #f8f9fa;
-    border-radius: 4px;
-}
-
-.metric-card h6 {
     color: var(--text-color);
+    font-size: 2rem;
     margin-bottom: 0.5rem;
 }
 
-.metric-value {
-    font-size: 1.5rem;
+.section-header p {
+    color: #666;
+    font-size: 1.1rem;
+}
+
+/* 卡片样式 */
+.params-card, .results-card {
+    background: #fff;
+    border-radius: 8px;
+    padding: 1.5rem;
+    box-shadow: var(--card-shadow);
+}
+
+.form-group {
+    margin-bottom: 1.5rem;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: var(--text-color);
     font-weight: 500;
-    color: var(--primary-color);
 }
 
-/* 图表容器样式 */
-.chart-container {
-    min-height: 400px;
-    padding: 1rem;
-}
-
-/* 表单控件样式 */
 .form-control {
     border: 1px solid var(--border-color);
     border-radius: 4px;
-    padding: 0.5rem 1rem;
+    padding: 0.5rem 0.75rem;
+    width: 100%;
+    transition: all 0.3s;
 }
 
 .form-control:focus {
     border-color: var(--primary-color);
-    box-shadow: 0 0 0 2px rgba(45,140,240,.2);
+    box-shadow: 0 0 0 2px rgba(24,144,255,.2);
 }
 
 /* 按钮样式 */
@@ -106,6 +96,8 @@ body {
     background-color: var(--primary-color);
     border-color: var(--primary-color);
     padding: 0.5rem 1.5rem;
+    border-radius: 4px;
+    transition: all 0.3s;
 }
 
 .btn-primary:hover {
@@ -115,26 +107,159 @@ body {
 
 .btn-block {
     width: 100%;
-    margin-top: 1rem;
 }
 
-/* 页脚样式 */
-.footer {
-    background: #2d3436;
+/* 图表容器样式 */
+.chart-container {
+    position: relative;
+    height: 300px;
+    margin-top: 1.5rem;
+}
+
+/* 指标展示样式 */
+.metrics-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.metric-card {
+    background: #f8f9fa;
+    padding: 1rem;
+    border-radius: 6px;
+    text-align: center;
+}
+
+.metric-label {
+    color: #666;
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+}
+
+.metric-value {
+    color: var(--primary-color);
+    font-size: 1.5rem;
+    font-weight: 500;
+}
+
+/* 客服面板样式 */
+.cs-panel {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 1000;
+}
+
+.cs-button {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--primary-color);
     color: #fff;
-    padding: 3rem 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,.15);
+    transition: all 0.3s;
 }
 
-.footer h5 {
+.cs-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0,0,0,.2);
+}
+
+/* 登录模态框样式 */
+.modal-content {
+    border-radius: 8px;
+    border: none;
+}
+
+.modal-header {
+    background: var(--primary-color);
     color: #fff;
-    margin-bottom: 1.5rem;
+    border-radius: 8px 8px 0 0;
 }
 
-.footer a {
-    color: rgba(255,255,255,.7);
-    text-decoration: none;
+.modal-title {
+    font-weight: 500;
 }
 
-.footer a:hover {
-    color: #fff;
+/* 加载动画样式 */
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255,255,255,.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
 }
+
+.loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid var(--primary-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* 添加客服面板样式 */
+.cs-panel {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 1000;
+}
+
+.cs-chat-window {
+    position: fixed;
+    bottom: 80px;
+    right: 20px;
+    width: 300px;
+    height: 400px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+    display: flex;
+    flex-direction: column;
+}
+
+.cs-header {
+    padding: 10px;
+    background: var(--primary-color);
+    color: white;
+    border-radius: 8px 8px 0 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.cs-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px;
+}
+
+.cs-input {
+    padding: 10px;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+}
+
+.cs-input input {
+    flex: 1;
+    margin-right: 10px;
+}
+
+/* 添加其他必要的样式... */
