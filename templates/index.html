@@ -6,113 +6,407 @@
     <title>拨云见策 - 专业量化交易分析平台</title>
     <!-- 引入Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- 引入自定义CSS -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <!-- 引入Animate.css -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
-    <!-- 引入Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- 引入Chart.js热力图插件 -->
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-matrix@1.1.1/dist/chartjs-chart-matrix.min.js"></script>
     <!-- 引入Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- 引入Flatpickr日期选择器 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <!-- 引入Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- 引入自定义CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body class="finance-theme">
-    <div class="platform-header">
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar navbar-expand-lg navbar-dark">
         <div class="container">
-            <div class="header-content">
-                <div class="logo-section">
-                    <h1 class="platform-title animate__animated animate__fadeInDown">
-                        <i class="fas fa-chart-line"></i> 拨云见策
-                    </h1>
-                    <p class="platform-subtitle">专业量化交易分析平台</p>
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-chart-line"></i> 拨云见策
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="#" data-page="home">首页</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" data-page="backtest">单一货币对回测</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" data-page="risk">多货币对风险分析</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" data-page="optimize">策略优化</a>
+                    </li>
+                </ul>
+                <!-- 用户登录/注册按钮 -->
+                <div class="d-flex">
+                    <button class="btn btn-outline-light me-2" data-bs-toggle="modal" data-bs-target="#loginModal">
+                        <i class="fas fa-user"></i> 登录
+                    </button>
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#registerModal">
+                        <i class="fas fa-user-plus"></i> 注册
+                    </button>
                 </div>
             </div>
         </div>
-    </div>
+    </nav>
 
+    <!-- 主内容区域 -->
     <div class="container main-content py-4">
-        <!-- 操作面板 -->
-        <div class="operation-panel animate__animated animate__fadeInUp">
-            <form id="forexForm" class="mb-4">
-                <div class="row g-3">
-                    <div class="col-md-6">
-                        <div class="form-group">
-                            <label for="currency_pair" class="form-label">
-                                <i class="fas fa-exchange-alt"></i> 交易品种
-                            </label>
-                            <select id="currency_pair" class="form-select custom-select" required>
-                                <option value="">请选择交易品种</option>
-                                <option value="USD/EUR">美元/欧元 (USD/EUR)</option>
-                                <option value="USD/JPY">美元/日元 (USD/JPY)</option>
-                                <option value="GBP/USD">英镑/美元 (GBP/USD)</option>
-                                <option value="AUD/USD">澳元/美元 (AUD/USD)</option>
-                                <option value="USD/CHF">美元/瑞郎 (USD/CHF)</option>
-                                <option value="NZD/USD">新西兰元/美元 (NZD/USD)</option>
-                                <option value="USD/CAD">美元/加元 (USD/CAD)</option>
-                            </select>
+        <!-- 首页内容 -->
+        <div id="homePage" class="page-content">
+            <div class="welcome-section text-center">
+                <h1 class="display-4 mb-4">欢迎使用拨云见策量化交易平台</h1>
+                <p class="lead mb-5">专业的外汇量化分析工具，助您洞察市场，把握机遇</p>
+                
+                <div class="row feature-cards">
+                    <div class="col-md-4 mb-4">
+                        <div class="card feature-card">
+                            <div class="card-body text-center">
+                                <i class="fas fa-chart-line fa-3x mb-3"></i>
+                                <h3 class="card-title">单一货币对回测</h3>
+                                <p class="card-text">对单一货币对进行历史回测，评估策略表现</p>
+                                <button class="btn btn-primary mt-3" data-page="backtest">开始回测</button>
+                            </div>
                         </div>
                     </div>
-                    <div class="col-md-6">
-                        <div class="form-group">
-                            <label for="optimization_method" class="form-label">
-                                <i class="fas fa-cogs"></i> 策略优化
-                            </label>
-                            <select id="optimization_method" class="form-select custom-select">
-                                <option value="none">标准策略</option>
-                                <option value="grid_search">网格优化</option>
-                                <option value="random_search">随机优化</option>
-                                <option value="bayesian_optimization">贝叶斯优化</option>
-                                <option value="genetic_algorithm">遗传算法优化</option>
-                            </select>
+                    <div class="col-md-4 mb-4">
+                        <div class="card feature-card">
+                            <div class="card-body text-center">
+                                <i class="fas fa-project-diagram fa-3x mb-3"></i>
+                                <h3 class="card-title">多货币对风险分析</h3>
+                                <p class="card-text">分析多货币对之间的相关性和系统性风险</p>
+                                <button class="btn btn-primary mt-3" data-page="risk">风险分析</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-4">
+                        <div class="card feature-card">
+                            <div class="card-body text-center">
+                                <i class="fas fa-cogs fa-3x mb-3"></i>
+                                <h3 class="card-title">策略优化</h3>
+                                <p class="card-text">优化交易参数，提高策略的收益率和稳定性</p>
+                                <button class="btn btn-primary mt-3" data-page="optimize">开始优化</button>
+                            </div>
                         </div>
                     </div>
                 </div>
-                <div class="action-buttons mt-4">
-                    <button type="submit" class="btn btn-primary action-btn" data-action="loadData">
-                        <i class="fas fa-database"></i> 加载数据
-                    </button>
-                    <button type="submit" class="btn btn-primary action-btn" data-action="generateSignals">
-                        <i class="fas fa-signal"></i> 生成信号
-                    </button>
-                    <button type="submit" class="btn btn-primary action-btn" data-action="runOptimizedBacktest">
-                        <i class="fas fa-chart-bar"></i> 策略回测
-                    </button>
-                    <button type="submit" class="btn btn-primary action-btn" data-action="explain_signal">
-                        <i class="fas fa-brain"></i> 策略解析
-                    </button>
-                </div>
-            </form>
-        </div>
-
-        <!-- 欢迎区域 -->
-        <div id="welcomeContainer" class="welcome-container text-center animate__animated animate__fadeIn">
-            <div class="welcome-text">
-                <h2 class="artistic-text primary-text">智者远虑 · 稳健制胜</h2>
-                <h3 class="artistic-text secondary-text">以数据为基石 用智慧创造价值</h3>
-                <p class="artistic-text description-text">每一次决策，都建立在深度分析的根基之上</p>
             </div>
         </div>
-
+        
+        <!-- 单一货币对回测页面 -->
+        <div id="backtestPage" class="page-content" style="display: none;">
+            <h2 class="section-title mb-4">单一货币对回测</h2>
+            
+            <div class="card mb-4">
+                <div class="card-body">
+                    <form id="backtestForm">
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label for="currency" class="form-label">货币对</label>
+                                <select id="currency" name="currency" class="form-select" required>
+                                    <option value="">请选择货币对</option>
+                                    <option value="CNYAUD">CNY/AUD</option>
+                                    <option value="CNYEUR">CNY/EUR</option>
+                                    <option value="CNYGBP">CNY/GBP</option>
+                                    <option value="CNYJPY">CNY/JPY</option>
+                                    <option value="CNYUSD">CNY/USD</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="startDate" class="form-label">开始日期</label>
+                                <input type="text" id="startDate" name="startDate" class="form-control datepicker" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="endDate" class="form-label">结束日期</label>
+                                <input type="text" id="endDate" name="endDate" class="form-control datepicker" required>
+                            </div>
+                        </div>
+                        
+                        <div class="d-flex justify-content-end">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-play"></i> 运行回测
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- 回测结果区域 -->
+            <div id="backtestResults" style="display: none;">
+                <!-- 回测结果将通过JavaScript动态添加 -->
+            </div>
+        </div>
+        
+        <!-- 多货币对风险分析页面 -->
+        <div id="riskPage" class="page-content" style="display: none;">
+            <h2 class="section-title mb-4">多货币对风险分析</h2>
+            
+            <div class="card mb-4">
+                <div class="card-body">
+                    <form id="riskForm">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">选择货币对</label>
+                                <div class="currency-checkboxes">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" value="CNYAUD" id="checkCNYAUD" name="currencies" checked>
+                                        <label class="form-check-label" for="checkCNYAUD">CNY/AUD</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" value="CNYEUR" id="checkCNYEUR" name="currencies" checked>
+                                        <label class="form-check-label" for="checkCNYEUR">CNY/EUR</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" value="CNYGBP" id="checkCNYGBP" name="currencies" checked>
+                                        <label class="form-check-label" for="checkCNYGBP">CNY/GBP</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" value="CNYJPY" id="checkCNYJPY" name="currencies" checked>
+                                        <label class="form-check-label" for="checkCNYJPY">CNY/JPY</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" value="CNYUSD" id="checkCNYUSD" name="currencies" checked>
+                                        <label class="form-check-label" for="checkCNYUSD">CNY/USD</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="analysisType" class="form-label">分析类型</label>
+                                <select id="analysisType" name="analysisType" class="form-select">
+                                    <option value="correlation">相关性分析</option>
+                                    <option value="risk">风险评估</option>
+                                    <option value="combined">综合分析</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="d-flex justify-content-end">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-search"></i> 开始分析
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- 风险分析结果区域 -->
+            <div id="riskResults" style="display: none;">
+                <!-- 风险分析结果将通过JavaScript动态添加 -->
+            </div>
+        </div>
+        
+        <!-- 策略优化页面 -->
+        <div id="optimizePage" class="page-content" style="display: none;">
+            <h2 class="section-title mb-4">策略优化</h2>
+            
+            <div class="card mb-4">
+                <div class="card-body">
+                    <form id="optimizeForm">
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label for="optimizeCurrency" class="form-label">货币对</label>
+                                <select id="optimizeCurrency" name="currency" class="form-select" required>
+                                    <option value="">请选择货币对</option>
+                                    <option value="CNYAUD">CNY/AUD</option>
+                                    <option value="CNYEUR">CNY/EUR</option>
+                                    <option value="CNYGBP">CNY/GBP</option>
+                                    <option value="CNYJPY">CNY/JPY</option>
+                                    <option value="CNYUSD">CNY/USD</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="optimizeMethod" class="form-label">优化方法</label>
+                                <select id="optimizeMethod" name="method" class="form-select" required>
+                                    <option value="grid">网格搜索</option>
+                                    <option value="random">随机搜索</option>
+                                    <option value="bayesian">贝叶斯优化</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="optimizeTarget" class="form-label">优化目标</label>
+                                <select id="optimizeTarget" name="target" class="form-select" required>
+                                    <option value="return">最大化收益率</option>
+                                    <option value="sharpe">最大化夏普比率</option>
+                                    <option value="drawdown">最小化回撤</option>
+                                    <option value="balanced">平衡风险收益</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <h5 class="mt-4 mb-3">参数范围设置</h5>
+                        <div class="row mb-3">
+                            <div class="col-md-3">
+                                <label for="stopLoss" class="form-label">止损比例 (%)</label>
+                                <input type="range" class="form-range" id="stopLoss" name="stopLoss" min="1" max="5" step="0.5" value="2">
+                                <div class="d-flex justify-content-between">
+                                    <span>1%</span>
+                                    <span id="stopLossValue">2%</span>
+                                    <span>5%</span>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="takeProfit" class="form-label">止盈比例 (%)</label>
+                                <input type="range" class="form-range" id="takeProfit" name="takeProfit" min="2" max="15" step="1" value="8">
+                                <div class="d-flex justify-content-between">
+                                    <span>2%</span>
+                                    <span id="takeProfitValue">8%</span>
+                                    <span>15%</span>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="positionSize" class="form-label">仓位大小 (%)</label>
+                                <input type="range" class="form-range" id="positionSize" name="positionSize" min="10" max="100" step="10" value="50">
+                                <div class="d-flex justify-content-between">
+                                    <span>10%</span>
+                                    <span id="positionSizeValue">50%</span>
+                                    <span>100%</span>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="trailingStop" class="form-label">追踪止损 (%)</label>
+                                <input type="range" class="form-range" id="trailingStop" name="trailingStop" min="0.5" max="5" step="0.5" value="1.5">
+                                <div class="d-flex justify-content-between">
+                                    <span>0.5%</span>
+                                    <span id="trailingStopValue">1.5%</span>
+                                    <span>5%</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="d-flex justify-content-end">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-cogs"></i> 开始优化
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- 优化结果区域 -->
+            <div id="optimizeResults" style="display: none;">
+                <!-- 优化结果将通过JavaScript动态添加 -->
+            </div>
+        </div>
+        
         <!-- 加载动画 -->
-        <div id="loading" class="loading-container" style="display: none;">
+        <div id="loading" style="display: none;">
             <div class="spinner-border text-primary" role="status">
                 <span class="visually-hidden">加载中...</span>
             </div>
-            <p class="loading-text">数据分析中，请稍候...</p>
+            <p>正在处理，请稍候...</p>
         </div>
-
-        <!-- 提示信息 -->
-        <div id="error" class="alert-container mt-4" style="display: none;"></div>
-        <div id="success" class="alert-container mt-4" style="display: none;"></div>
-
-        <!-- 内容显示区域 -->
-        <div id="contentContainer" class="content-display mt-4"></div>
+    </div>
+    
+    <!-- 登录模态框 -->
+    <div class="modal fade" id="loginModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">用户登录</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="loginForm">
+                        <div class="mb-3">
+                            <label for="loginUsername" class="form-label">用户名</label>
+                            <input type="text" class="form-control" id="loginUsername" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="loginPassword" class="form-label">密码</label>
+                            <input type="password" class="form-control" id="loginPassword" required>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="rememberMe">
+                                <label class="form-check-label" for="rememberMe">记住我</label>
+                            </div>
+                            <a href="#" class="text-decoration-none">忘记密码?</a>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" id="loginButton">登录</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 注册模态框 -->
+    <div class="modal fade" id="registerModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">用户注册</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="registerForm">
+                        <div class="mb-3">
+                            <label for="registerUsername" class="form-label">用户名</label>
+                            <input type="text" class="form-control" id="registerUsername" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="registerEmail" class="form-label">电子邮箱</label>
+                            <input type="email" class="form-control" id="registerEmail" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="registerPassword" class="form-label">密码</label>
+                            <input type="password" class="form-control" id="registerPassword" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="confirmPassword" class="form-label">确认密码</label>
+                            <input type="password" class="form-control" id="confirmPassword" required>
+                        </div>
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="agreeTerms" required>
+                            <label class="form-check-label" for="agreeTerms">
+                                我同意<a href="#" class="text-decoration-none">服务条款</a>和<a href="#" class="text-decoration-none">隐私政策</a>
+                            </label>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" id="registerButton">注册</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 客服聊天窗口 -->
+    <div class="customer-service-widget">
+        <div class="cs-button" id="csButton">
+            <i class="fas fa-comments"></i>
+        </div>
+        <div class="cs-panel" id="csPanel" style="display: none;">
+            <div class="cs-header">
+                <h5>在线客服</h5>
+                <button class="cs-close" id="csClose"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="cs-body" id="csBody">
+                <div class="cs-message cs-received">
+                    <div class="cs-message-content">
+                        您好！欢迎使用拨云见策量化交易平台。有什么可以帮助您的吗？
+                    </div>
+                    <div class="cs-message-time">刚刚</div>
+                </div>
+            </div>
+            <div class="cs-footer">
+                <input type="text" class="cs-input" id="csInput" placeholder="请输入您的问题...">
+                <button class="cs-send" id="csSend"><i class="fas fa-paper-plane"></i></button>
+            </div>
+        </div>
     </div>
 
-    <!-- 引入Bootstrap JS -->
+    <!-- 引入JavaScript库 -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <!-- 自定义JS -->
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/zh.js"></script>
+    <!-- 引入自定义JavaScript -->
     <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>

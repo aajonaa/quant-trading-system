@@ -972,3 +972,184 @@ canvas {
         padding: 1.5rem;
     }
 }
+
+/* 模态框样式 */
+.modal-content {
+    border-radius: 10px;
+    border: none;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+}
+
+.modal-header {
+    border-bottom: 1px solid #eee;
+    padding: 1.2rem 1.5rem;
+}
+
+.modal-title {
+    color: var(--primary-color);
+    font-weight: 600;
+}
+
+.modal-body {
+    padding: 1.5rem;
+}
+
+.modal-footer {
+    border-top: 1px solid #eee;
+    padding: 1.2rem 1.5rem;
+}
+
+/* 客服聊天窗口 */
+.customer-service-widget {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 1000;
+}
+
+.cs-button {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background-color: var(--secondary-color);
+    color: white;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 24px;
+    cursor: pointer;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+}
+
+.cs-button:hover {
+    transform: scale(1.1);
+    background-color: #2980b9;
+}
+
+.cs-panel {
+    position: absolute;
+    bottom: 70px;
+    right: 0;
+    width: 350px;
+    height: 450px;
+    background-color: white;
+    border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.cs-header {
+    padding: 15px;
+    background-color: var(--primary-color);
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.cs-header h5 {
+    margin: 0;
+    font-weight: 600;
+}
+
+.cs-close {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 18px;
+    cursor: pointer;
+}
+
+.cs-body {
+    flex: 1;
+    padding: 15px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.cs-message {
+    margin-bottom: 15px;
+    max-width: 80%;
+}
+
+.cs-received {
+    align-self: flex-start;
+}
+
+.cs-sent {
+    align-self: flex-end;
+}
+
+.cs-message-content {
+    padding: 10px 15px;
+    border-radius: 10px;
+    background-color: #f1f1f1;
+    color: var(--text-color);
+}
+
+.cs-sent .cs-message-content {
+    background-color: var(--secondary-color);
+    color: white;
+}
+
+.cs-message-time {
+    font-size: 0.8rem;
+    color: #999;
+    margin-top: 5px;
+    text-align: right;
+}
+
+.cs-footer {
+    padding: 15px;
+    border-top: 1px solid #eee;
+    display: flex;
+}
+
+.cs-input {
+    flex: 1;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 20px;
+    margin-right: 10px;
+}
+
+.cs-send {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-color: var(--secondary-color);
+    color: white;
+    border: none;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .cs-panel {
+        width: 300px;
+        height: 400px;
+        right: -10px;
+    }
+
+    .feature-cards .col-md-4 {
+        margin-bottom: 1.5rem;
+    }
+}
+
+@media (max-width: 576px) {
+    .cs-panel {
+        width: 280px;
+        height: 350px;
+    }
+
+    .welcome-section h1 {
+        font-size: 2rem;
+    }
+}
