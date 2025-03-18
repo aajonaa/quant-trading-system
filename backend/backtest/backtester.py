@@ -3,9 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
 import logging
-from datetime import datetime
 import seaborn as sns
-import itertools
 import matplotlib.gridspec as gridspec
 
 class ForexBacktester:
@@ -78,58 +76,81 @@ class ForexBacktester:
             
     def run_backtest(self, params=None):
         """执行回测"""
-        # 基础参数
+        # 基础参数 - 更加激进的设置
         default_params = {
             'commission': 0.0001,      # 手续费
-            'stop_loss': 0.02,         # 止损比例
-            'take_profit': 0.04,       # 止盈比例
-            'position_size': 0.5,      # 每笔交易资金比例
+            'stop_loss': 0.03,         # 止损比例
+            'take_profit': 0.08,       # 止盈比例
+            'position_size': 0.8,      # 每笔交易资金比例
             'use_trailing_stop': True, # 使用追踪止损
-            'trailing_stop': 0.015,    # 追踪止损比例
+            'trailing_stop': 0.02,     # 追踪止损比例
             'signal_threshold': 0.0,   # 信号阈值
-            'signal_persistence': 2,   # 信号持续天数
+            'signal_persistence': 1,   # 信号持续天数
+            'use_signal_filter': False,# 不使用信号过滤
+            'use_time_filter': False,  # 不使用时间过滤
+            'use_position_scaling': False # 不使用仓位缩放
         }
         
-        # 货币对特定参数 - 为不同货币对提供完全不同的策略
+        # 货币对特定参数 - 为不同货币对提供优化参数
         pair_specific_params = {
-            # CNYAUD策略 - 基于均值回归
+            # CNYAUD策略 - 考虑其相对稳定性
             'CNYAUD': {
-                'strategy_type': 'mean_reversion',  # 均值回归策略
-                'position_size': 0.25,              # 降低仓位大小
-                'take_profit': 0.025,               # 更小的止盈目标
-                'stop_loss': 0.015,                 # 更小的止损
-                'trailing_stop': 0.01,              # 更紧的追踪止损
-                'signal_persistence': 1,            # 降低信号持续性要求
-                'lookback_period': 20,              # 均值回归周期
-                'std_dev_threshold': 1.5,           # 标准差阈值
-                'use_bollinger': True,              # 使用布林带
-                'use_rsi_filter': True,             # 使用RSI过滤
-                'rsi_overbought': 70,               # RSI超买阈值
-                'rsi_oversold': 30,                 # RSI超卖阈值
-                'min_trade_interval': 7,            # 交易间隔(天)
-                'max_trades_per_month': 6,          # 每月最大交易数
-                'use_volume_profile': True,         # 使用成交量分布
-                'use_signal_reversal': True         # 使用信号反转
+                'position_size': 1.0,              # 最大仓位
+                'take_profit': 0.12,               # 更大的止盈目标
+                'stop_loss': 0.02,                 # 较小的止损
+                'trailing_stop': 0.03,             # 较宽的追踪止损
+                'signal_persistence': 1,           # 降低信号持续性要求
+                'signal_amplifier': 1.5,           # 信号放大器
+                'reverse_signal': False,           # 不反转信号
+                'use_signal_filter': False,        # 不使用信号过滤
+                'use_time_filter': False,          # 不使用时间过滤
+                'use_position_scaling': False,     # 不使用仓位缩放
+                'leverage': 2.0                    # 使用杠杆
             },
             
-            # CNYUSD策略 - 基于趋势跟踪
+            # CNYUSD策略 - 考虑其稳定性
             'CNYUSD': {
-                'strategy_type': 'trend_following',  # 趋势跟踪策略
-                'position_size': 0.3,                # 适中的仓位大小
-                'take_profit': 0.05,                 # 更大的止盈目标
-                'stop_loss': 0.01,                   # 更小的止损
-                'trailing_stop': 0.02,               # 更宽的追踪止损
-                'signal_persistence': 3,             # 增加信号持续性要求
-                'use_adx_filter': True,              # 使用ADX过滤
-                'adx_threshold': 25,                 # ADX阈值
-                'use_macd': True,                    # 使用MACD
-                'use_ma_crossover': True,            # 使用均线交叉
-                'fast_ma': 10,                       # 快速均线
-                'slow_ma': 30,                       # 慢速均线
-                'min_trade_interval': 10,            # 交易间隔(天)
-                'max_trades_per_month': 4,           # 每月最大交易数
-                'use_volatility_filter': True,       # 使用波动率过滤
-                'volatility_lookback': 20            # 波动率回看期
+                'position_size': 1.0,              # 最大仓位
+                'take_profit': 0.10,               # 较大的止盈目标
+                'stop_loss': 0.02,                 # 较小的止损
+                'trailing_stop': 0.025,            # 适中的追踪止损
+                'signal_persistence': 1,           # 降低信号持续性要求
+                'signal_amplifier': 1.2,           # 信号放大器
+                'reverse_signal': False,           # 不反转信号
+                'use_signal_filter': False,        # 不使用信号过滤
+                'use_time_filter': False,          # 不使用时间过滤
+                'use_position_scaling': False,     # 不使用仓位缩放
+                'leverage': 1.8                    # 使用杠杆
+            },
+            
+            # CNYEUR策略
+            'CNYEUR': {
+                'position_size': 1.0,              # 最大仓位
+                'take_profit': 0.09,               # 较大的止盈目标
+                'stop_loss': 0.025,                # 适中的止损
+                'trailing_stop': 0.03,             # 较宽的追踪止损
+                'signal_persistence': 1,           # 降低信号持续性要求
+                'leverage': 1.5                    # 使用杠杆
+            },
+            
+            # CNYGBP策略
+            'CNYGBP': {
+                'position_size': 1.0,              # 最大仓位
+                'take_profit': 0.09,               # 较大的止盈目标
+                'stop_loss': 0.025,                # 适中的止损
+                'trailing_stop': 0.03,             # 较宽的追踪止损
+                'signal_persistence': 1,           # 降低信号持续性要求
+                'leverage': 1.5                    # 使用杠杆
+            },
+            
+            # CNYJPY策略
+            'CNYJPY': {
+                'position_size': 1.0,              # 最大仓位
+                'take_profit': 0.09,               # 较大的止盈目标
+                'stop_loss': 0.025,                # 适中的止损
+                'trailing_stop': 0.03,             # 较宽的追踪止损
+                'signal_persistence': 1,           # 降低信号持续性要求
+                'leverage': 1.5                    # 使用杠杆
             }
         }
         
@@ -144,7 +165,7 @@ class ForexBacktester:
                 # 应用货币对特定参数
                 if pair in pair_specific_params:
                     pair_params = {**self.params, **pair_specific_params[pair]}
-                    self.logger.info(f"应用 {pair} 特定策略: {pair_params['strategy_type']}")
+                    self.logger.info(f"应用 {pair} 特定参数")
                 else:
                     pair_params = self.params
                 
@@ -161,54 +182,44 @@ class ForexBacktester:
                 trailing_high = capital
                 entry_price = 0
                 trailing_stop_price = 0
-                last_trade_date = df.index[0]
-                monthly_trade_count = {}  # 记录每月交易次数
-                
-                # 计算基础技术指标
-                self._calculate_indicators(df, pair_params)
                 
                 # 主回测循环
-                for i in range(50, len(df)):  # 从第50个数据点开始，确保所有指标都已计算
+                for i in range(1, len(df)):
                     date = df.index[i]
                     price = df['Price'].iloc[i]
                     
                     # 获取原始信号
                     original_signal = df['Signal'].iloc[i]
                     
-                    # 应用特定策略生成交易信号
-                    if pair == 'CNYAUD' and pair_params['strategy_type'] == 'mean_reversion':
-                        signal = self._apply_mean_reversion_strategy(df, i, original_signal, pair_params)
-                    elif pair == 'CNYUSD' and pair_params['strategy_type'] == 'trend_following':
-                        signal = self._apply_trend_following_strategy(df, i, original_signal, pair_params)
+                    # 应用信号放大器 - 为AUD和USD特别设置
+                    if pair in ['CNYAUD', 'CNYUSD'] and 'signal_amplifier' in pair_params:
+                        signal = original_signal * pair_params['signal_amplifier']
                     else:
                         signal = original_signal
                     
-                    # 检查交易频率限制
-                    if pair in pair_specific_params:
-                        # 检查每月交易次数
-                        month_key = f"{date.year}-{date.month}"
-                        if month_key not in monthly_trade_count:
-                            monthly_trade_count[month_key] = 0
-                        
-                        if monthly_trade_count[month_key] >= pair_params.get('max_trades_per_month', float('inf')):
-                            signal = 0  # 超过每月最大交易数，不开新仓
-                        
-                        # 检查与上次交易的间隔
-                        days_since_last_trade = (date - last_trade_date).days
-                        if days_since_last_trade < pair_params.get('min_trade_interval', 0):
-                            signal = 0  # 交易间隔不足，不开新仓
+                    # 反转信号 - 如果需要
+                    if pair in pair_specific_params and pair_params.get('reverse_signal', False):
+                        signal = -signal
                     
                     # 计算当前持仓的收益
                     if position != 0 and entry_price > 0:
                         # 计算当前持仓的未实现收益
                         if position == 1:  # 多头
                             unrealized_pnl = (price - entry_price) / entry_price
+                            # 应用杠杆
+                            if 'leverage' in pair_params:
+                                unrealized_pnl *= pair_params['leverage']
+                            
                             # 更新追踪止损价格
                             if pair_params['use_trailing_stop'] and price > entry_price:
                                 new_stop = price * (1 - pair_params['trailing_stop'])
                                 trailing_stop_price = max(trailing_stop_price, new_stop)
                         else:  # 空头
                             unrealized_pnl = (entry_price - price) / entry_price
+                            # 应用杠杆
+                            if 'leverage' in pair_params:
+                                unrealized_pnl *= pair_params['leverage']
+                            
                             # 更新追踪止损价格
                             if pair_params['use_trailing_stop'] and price < entry_price:
                                 new_stop = price * (1 + pair_params['trailing_stop'])
@@ -236,8 +247,8 @@ class ForexBacktester:
                             close_position = True
                             close_reason = "止盈"
                         
-                        # 信号反转检查
-                        elif (position == 1 and signal < 0) or (position == -1 and signal > 0):
+                        # 信号反转检查 - 只有当信号足够强时才反转
+                        elif (position == 1 and signal < -0.5) or (position == -1 and signal > 0.5):
                             close_position = True
                             close_reason = "信号反转"
                         
@@ -262,85 +273,50 @@ class ForexBacktester:
                                 'position': 0
                             })
                             
-                            # 更新交易统计
-                            last_trade_date = date
-                            month_key = f"{date.year}-{date.month}"
-                            monthly_trade_count[month_key] = monthly_trade_count.get(month_key, 0) + 1
-                            
                             # 平仓
                             position = 0
                             entry_price = 0
                             trailing_stop_price = 0
                     
                     # 开仓逻辑 - 只有当没有持仓时才考虑开仓
-                    if position == 0 and capital > 0 and signal != 0:
-                        # 检查信号持续性
-                        signal_persistent = True
-                        if pair_params['signal_persistence'] > 1 and i >= pair_params['signal_persistence']:
-                            # 检查过去几天的信号是否一致
-                            for j in range(1, pair_params['signal_persistence']):
-                                prev_signal = df['Signal'].iloc[i-j]
-                                if (signal > 0 and prev_signal <= 0) or (signal < 0 and prev_signal >= 0):
-                                    signal_persistent = False
-                                    break
+                    if position == 0 and capital > 0 and abs(signal) > pair_params['signal_threshold']:
+                        # 计算仓位大小
+                        position_size = pair_params['position_size']
+                        position_value = capital * position_size
                         
-                        # 只有当信号足够强且持续时才开仓
-                        if abs(signal) > pair_params['signal_threshold'] and signal_persistent:
-                            # 计算仓位大小
-                            position_size = pair_params['position_size']
+                        # 信号为正，开多头
+                        if signal > 0:
+                            position = 1
+                            entry_price = price
+                            # 设置追踪止损初始价格
+                            trailing_stop_price = price * (1 - pair_params['trailing_stop'])
                             
-                            # 波动率调整仓位
-                            if pair_params.get('use_volatility_filter', False):
-                                volatility = df['Volatility'].iloc[i]
-                                # 波动率越高，仓位越小
-                                vol_factor = 0.2 / max(volatility, 0.05)
-                                position_size = min(position_size, vol_factor)
+                            trades.append({
+                                'date': date,
+                                'type': 'Buy',
+                                'price': price,
+                                'capital': capital,
+                                'position_size': position_value,
+                                'returns': 0,
+                                'position': position
+                            })
                             
-                            position_value = capital * position_size
+                        # 信号为负，开空头
+                        elif signal < 0:
+                            position = -1
+                            entry_price = price
+                            # 设置追踪止损初始价格
+                            trailing_stop_price = price * (1 + pair_params['trailing_stop'])
                             
-                            # 信号为正，开多头
-                            if signal > 0:
-                                position = 1
-                                entry_price = price
-                                # 设置追踪止损初始价格
-                                trailing_stop_price = price * (1 - pair_params['trailing_stop'])
-                                
-                                trades.append({
-                                    'date': date,
-                                    'type': 'Buy',
-                                    'price': price,
-                                    'capital': capital,
-                                    'position_size': position_value,
-                                    'returns': 0,
-                                    'position': position
-                                })
-                                
-                                # 更新交易统计
-                                last_trade_date = date
-                                month_key = f"{date.year}-{date.month}"
-                                monthly_trade_count[month_key] = monthly_trade_count.get(month_key, 0) + 1
-                                    
-                            # 信号为负，开空头
-                            elif signal < 0:
-                                position = -1
-                                entry_price = price
-                                # 设置追踪止损初始价格
-                                trailing_stop_price = price * (1 + pair_params['trailing_stop'])
-                                
-                                trades.append({
-                                    'date': date,
-                                    'type': 'Sell',
-                                    'price': price,
-                                    'capital': capital,
-                                    'position_size': position_value,
-                                    'returns': 0,
-                                    'position': position
-                                })
-                                
-                                # 更新交易统计
-                                last_trade_date = date
-                                month_key = f"{date.year}-{date.month}"
-                                monthly_trade_count[month_key] = monthly_trade_count.get(month_key, 0) + 1
+                            trades.append({
+                                'date': date,
+                                'type': 'Sell',
+                                'price': price,
+                                'capital': capital,
+                                'position_size': position_value,
+                                'returns': 0,
+                                'position': position
+                            })
                 
                     # 记录权益曲线
                     current_drawdown = (trailing_high - capital) / trailing_high if trailing_high > 0 else 0
