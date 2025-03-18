@@ -22,7 +22,8 @@ class DatabaseManager:
             'forex_data',          # 外汇数据
             'macro_data',          # 宏观数据
             'backtest_signals',    # 回测信号
-            'multi_risk'           # 多货币风险
+            'multi_risk',          # 多货币风险
+            'users'               # 添加用户schema
         ]
         
         for schema in schemas:
@@ -35,6 +36,33 @@ class DatabaseManager:
 
     def create_tables(self):
         """创建所需的表"""
+        # 先创建schema
+        self.create_schema()
+        
+        # 创建用户表
+        self.cur.execute("""
+            CREATE TABLE IF NOT EXISTS users.account (
+                user_id SERIAL PRIMARY KEY,
+                username VARCHAR(50) UNIQUE NOT NULL,
+                password VARCHAR(100) NOT NULL,
+                email VARCHAR(100) UNIQUE NOT NULL,
+                balance DECIMAL(10,2) DEFAULT 0.00,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_login TIMESTAMP,
+                status VARCHAR(20) DEFAULT 'active'
+            );
+            
+            CREATE TABLE IF NOT EXISTS users.transactions (
+                transaction_id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users.account(user_id),
+                amount DECIMAL(10,2) NOT NULL,
+                type VARCHAR(20) NOT NULL,
+                status VARCHAR(20) DEFAULT 'pending',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                completed_at TIMESTAMP
+            );
+        """)
+        
         # 外汇数据表
         self.cur.execute("""
             CREATE TABLE IF NOT EXISTS forex_data.prices (

@@ -74,288 +74,77 @@ class ForexBacktester:
             self.logger.error(traceback.format_exc())
             return False
             
-    def run_backtest(self, params=None):
+    def run_backtest(self, currency_pair=None, start_date=None, end_date=None, strategy_params=None):
         """执行回测"""
-        # 基础参数 - 更加激进的设置
-        default_params = {
-            'commission': 0.0001,      # 手续费
-            'stop_loss': 0.03,         # 止损比例
-            'take_profit': 0.08,       # 止盈比例
-            'position_size': 0.8,      # 每笔交易资金比例
-            'use_trailing_stop': True, # 使用追踪止损
-            'trailing_stop': 0.02,     # 追踪止损比例
-            'signal_threshold': 0.0,   # 信号阈值
-            'signal_persistence': 1,   # 信号持续天数
-            'use_signal_filter': False,# 不使用信号过滤
-            'use_time_filter': False,  # 不使用时间过滤
-            'use_position_scaling': False # 不使用仓位缩放
-        }
-        
-        # 货币对特定参数 - 为不同货币对提供优化参数
-        pair_specific_params = {
-            # CNYAUD策略 - 考虑其相对稳定性
-            'CNYAUD': {
-                'position_size': 1.0,              # 最大仓位
-                'take_profit': 0.12,               # 更大的止盈目标
-                'stop_loss': 0.02,                 # 较小的止损
-                'trailing_stop': 0.03,             # 较宽的追踪止损
-                'signal_persistence': 1,           # 降低信号持续性要求
-                'signal_amplifier': 1.5,           # 信号放大器
-                'reverse_signal': False,           # 不反转信号
-                'use_signal_filter': False,        # 不使用信号过滤
-                'use_time_filter': False,          # 不使用时间过滤
-                'use_position_scaling': False,     # 不使用仓位缩放
-                'leverage': 2.0                    # 使用杠杆
-            },
-            
-            # CNYUSD策略 - 考虑其稳定性
-            'CNYUSD': {
-                'position_size': 1.0,              # 最大仓位
-                'take_profit': 0.10,               # 较大的止盈目标
-                'stop_loss': 0.02,                 # 较小的止损
-                'trailing_stop': 0.025,            # 适中的追踪止损
-                'signal_persistence': 1,           # 降低信号持续性要求
-                'signal_amplifier': 1.2,           # 信号放大器
-                'reverse_signal': False,           # 不反转信号
-                'use_signal_filter': False,        # 不使用信号过滤
-                'use_time_filter': False,          # 不使用时间过滤
-                'use_position_scaling': False,     # 不使用仓位缩放
-                'leverage': 1.8                    # 使用杠杆
-            },
-            
-            # CNYEUR策略
-            'CNYEUR': {
-                'position_size': 1.0,              # 最大仓位
-                'take_profit': 0.09,               # 较大的止盈目标
-                'stop_loss': 0.025,                # 适中的止损
-                'trailing_stop': 0.03,             # 较宽的追踪止损
-                'signal_persistence': 1,           # 降低信号持续性要求
-                'leverage': 1.5                    # 使用杠杆
-            },
-            
-            # CNYGBP策略
-            'CNYGBP': {
-                'position_size': 1.0,              # 最大仓位
-                'take_profit': 0.09,               # 较大的止盈目标
-                'stop_loss': 0.025,                # 适中的止损
-                'trailing_stop': 0.03,             # 较宽的追踪止损
-                'signal_persistence': 1,           # 降低信号持续性要求
-                'leverage': 1.5                    # 使用杠杆
-            },
-            
-            # CNYJPY策略
-            'CNYJPY': {
-                'position_size': 1.0,              # 最大仓位
-                'take_profit': 0.09,               # 较大的止盈目标
-                'stop_loss': 0.025,                # 适中的止损
-                'trailing_stop': 0.03,             # 较宽的追踪止损
-                'signal_persistence': 1,           # 降低信号持续性要求
-                'leverage': 1.5                    # 使用杠杆
-            }
-        }
-        
-        # 更新参数
-        self.params = {**default_params, **(params or {})}
-        
         try:
-            results = {}
-            for pair, df in self.pairs_data.items():
-                self.logger.info(f"开始回测 {pair}...")
-                
-                # 应用货币对特定参数
-                if pair in pair_specific_params:
-                    pair_params = {**self.params, **pair_specific_params[pair]}
-                    self.logger.info(f"应用 {pair} 特定参数")
-                else:
-                    pair_params = self.params
-                
-                # 确保必要的列存在
-                if 'Price' not in df.columns or 'Signal' not in df.columns:
-                    self.logger.error(f"{pair} 缺少必要的列，跳过")
-                    continue
-                
-                # 初始化结果
-                position = 0
-                capital = self.initial_capital
-                trades = []
-                equity_curve = [{'date': df.index[0], 'capital': capital, 'position': position, 'drawdown': 0}]
-                trailing_high = capital
-                entry_price = 0
-                trailing_stop_price = 0
-                
-                # 主回测循环
-                for i in range(1, len(df)):
-                    date = df.index[i]
-                    price = df['Price'].iloc[i]
-                    
-                    # 获取原始信号
-                    original_signal = df['Signal'].iloc[i]
-                    
-                    # 应用信号放大器 - 为AUD和USD特别设置
-                    if pair in ['CNYAUD', 'CNYUSD'] and 'signal_amplifier' in pair_params:
-                        signal = original_signal * pair_params['signal_amplifier']
-                    else:
-                        signal = original_signal
-                    
-                    # 反转信号 - 如果需要
-                    if pair in pair_specific_params and pair_params.get('reverse_signal', False):
-                        signal = -signal
-                    
-                    # 计算当前持仓的收益
-                    if position != 0 and entry_price > 0:
-                        # 计算当前持仓的未实现收益
-                        if position == 1:  # 多头
-                            unrealized_pnl = (price - entry_price) / entry_price
-                            # 应用杠杆
-                            if 'leverage' in pair_params:
-                                unrealized_pnl *= pair_params['leverage']
-                            
-                            # 更新追踪止损价格
-                            if pair_params['use_trailing_stop'] and price > entry_price:
-                                new_stop = price * (1 - pair_params['trailing_stop'])
-                                trailing_stop_price = max(trailing_stop_price, new_stop)
-                        else:  # 空头
-                            unrealized_pnl = (entry_price - price) / entry_price
-                            # 应用杠杆
-                            if 'leverage' in pair_params:
-                                unrealized_pnl *= pair_params['leverage']
-                            
-                            # 更新追踪止损价格
-                            if pair_params['use_trailing_stop'] and price < entry_price:
-                                new_stop = price * (1 + pair_params['trailing_stop'])
-                                trailing_stop_price = min(trailing_stop_price if trailing_stop_price > 0 else float('inf'), new_stop)
-                        
-                        # 检查是否触发止损或止盈
-                        close_position = False
-                        close_reason = ""
-                        
-                        # 止损检查
-                        if position == 1 and (price <= entry_price * (1 - pair_params['stop_loss']) or 
-                                             (pair_params['use_trailing_stop'] and price <= trailing_stop_price)):
-                            close_position = True
-                            close_reason = "止损"
-                        elif position == -1 and (price >= entry_price * (1 + pair_params['stop_loss']) or 
-                                               (pair_params['use_trailing_stop'] and price >= trailing_stop_price)):
-                            close_position = True
-                            close_reason = "止损"
-                        
-                        # 止盈检查
-                        elif position == 1 and price >= entry_price * (1 + pair_params['take_profit']):
-                            close_position = True
-                            close_reason = "止盈"
-                        elif position == -1 and price <= entry_price * (1 - pair_params['take_profit']):
-                            close_position = True
-                            close_reason = "止盈"
-                        
-                        # 信号反转检查 - 只有当信号足够强时才反转
-                        elif (position == 1 and signal < -0.5) or (position == -1 and signal > 0.5):
-                            close_position = True
-                            close_reason = "信号反转"
-                        
-                        # 执行平仓
-                        if close_position:
-                            # 计算实际收益
-                            realized_pnl = unrealized_pnl
-                            capital_before = capital
-                            capital *= (1 + realized_pnl - pair_params['commission'])
-                            actual_return = (capital - capital_before) / capital_before
-                            
-                            # 记录交易
-                            trade_type = 'Close Long' if position == 1 else 'Close Short'
-                            trades.append({
-                                'date': date,
-                                'type': trade_type,
-                                'reason': close_reason,
-                                'price': price,
-                                'entry_price': entry_price,
-                                'capital': capital,
-                                'returns': actual_return,
-                                'position': 0
-                            })
-                            
-                            # 平仓
-                            position = 0
-                            entry_price = 0
-                            trailing_stop_price = 0
-                    
-                    # 开仓逻辑 - 只有当没有持仓时才考虑开仓
-                    if position == 0 and capital > 0 and abs(signal) > pair_params['signal_threshold']:
-                        # 计算仓位大小
-                        position_size = pair_params['position_size']
-                        position_value = capital * position_size
-                        
-                        # 信号为正，开多头
-                        if signal > 0:
-                            position = 1
-                            entry_price = price
-                            # 设置追踪止损初始价格
-                            trailing_stop_price = price * (1 - pair_params['trailing_stop'])
-                            
-                            trades.append({
-                                'date': date,
-                                'type': 'Buy',
-                                'price': price,
-                                'capital': capital,
-                                'position_size': position_value,
-                                'returns': 0,
-                                'position': position
-                            })
-                            
-                        # 信号为负，开空头
-                        elif signal < 0:
-                            position = -1
-                            entry_price = price
-                            # 设置追踪止损初始价格
-                            trailing_stop_price = price * (1 + pair_params['trailing_stop'])
-                            
-                            trades.append({
-                                'date': date,
-                                'type': 'Sell',
-                                'price': price,
-                                'capital': capital,
-                                'position_size': position_value,
-                                'returns': 0,
-                                'position': position
-                            })
-                
-                    # 记录权益曲线
-                    current_drawdown = (trailing_high - capital) / trailing_high if trailing_high > 0 else 0
-                    if capital > trailing_high:
-                        trailing_high = capital
-                    
-                    equity_curve.append({
-                        'date': date,
-                        'capital': capital,
-                        'position': position,
-                        'drawdown': current_drawdown
-                    })
-                
-                # 确保至少有两个数据点
-                if len(equity_curve) >= 2:
-                    # 计算性能指标
-                    equity_df = pd.DataFrame(equity_curve)
-                    equity_df.set_index('date', inplace=True)
-                    
-                    # 转换交易记录为DataFrame
-                    trades_df = pd.DataFrame(trades) if trades else pd.DataFrame()
-                    if not trades_df.empty and 'date' in trades_df.columns:
-                        trades_df.set_index('date', inplace=True)
-                    
-                    # 计算更多指标
-                    results[pair] = self._calculate_metrics(trades_df, equity_df)
-                    self.logger.info(f"{pair} 回测完成，总收益率: {results[pair]['total_return']*100:.2f}%")
-                else:
-                    self.logger.warning(f"{pair} 数据不足，无法进行回测")
-                    results[pair] = self._get_default_metrics()
+            # 参数验证
+            if not currency_pair:
+                raise ValueError("必须指定货币对")
+            if not start_date:
+                raise ValueError("必须指定开始日期")
+            if not end_date:
+                raise ValueError("必须指定结束日期")
             
-            self.backtest_results = results
-            return True
+            # 加载数据
+            if not self.load_data():
+                raise Exception("数据加载失败")
+            
+            # 获取指定货币对的数据
+            if currency_pair not in self.pairs_data:
+                raise Exception(f"找不到 {currency_pair} 的数据")
+            
+            df = self.pairs_data[currency_pair].copy()
+            
+            # 过滤日期范围
+            if start_date and end_date:
+                df = df[start_date:end_date]
+                if df.empty:
+                    raise ValueError(f"在指定日期范围内没有找到数据: {start_date} 到 {end_date}")
+            
+            # 计算技术指标
+            self._calculate_indicators(df, strategy_params or {})
+            
+            # 执行回测计算
+            initial_capital = self.initial_capital
+            position = 0
+            equity = [initial_capital]
+            returns = []
+            
+            for i in range(1, len(df)):
+                signal = df['Signal'].iloc[i]
+                price = df['Price'].iloc[i]
+                
+                # 根据信号交易
+                if signal > 0 and position <= 0:
+                    position = 1
+                elif signal < 0 and position >= 0:
+                    position = -1
+                
+                # 计算收益
+                daily_return = position * (df['Price'].iloc[i] / df['Price'].iloc[i-1] - 1)
+                returns.append(daily_return)
+                equity.append(equity[-1] * (1 + daily_return))
+            
+            # 计算回测指标
+            equity_curve = pd.Series(equity, index=df.index)
+            returns = pd.Series(returns, index=df.index[1:])
+            
+            total_return = (equity[-1] / initial_capital - 1)
+            sharpe_ratio = np.sqrt(252) * returns.mean() / returns.std()
+            max_drawdown = (equity_curve / equity_curve.cummax() - 1).min()
+            win_rate = len(returns[returns > 0]) / len(returns)
+            
+            return {
+                'total_return': float(total_return),
+                'sharpe_ratio': float(sharpe_ratio),
+                'max_drawdown': float(max_drawdown),
+                'win_rate': float(win_rate),
+                'equity_curve': {str(k): float(v) for k, v in equity_curve.to_dict().items()}
+            }
             
         except Exception as e:
-            self.logger.error(f"回测执行失败: {str(e)}")
-            import traceback
-            self.logger.error(traceback.format_exc())
-            return False
+            self.logger.error(f"回测执行错误: {str(e)}")
+            raise
 
     def _calculate_indicators(self, df, params):
         """计算各种技术指标"""
@@ -984,20 +773,33 @@ class ForexBacktester:
 def main():
     # 设置日志
     logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
     
-    # 创建回测器实例
-    backtester = ForexBacktester(initial_capital=100000)
-    
-    # 加载数据
-    if not backtester.load_data():
-        return
-    
-    # 执行回测
-    if not backtester.run_backtest():
-        return
-    
-    # 生成报告
-    backtester.generate_reports()
+    try:
+        # 创建回测器实例
+        backtester = ForexBacktester(initial_capital=100000)
+        
+        # 加载数据
+        if not backtester.load_data():
+            logger.error("数据加载失败")
+            return
+        
+        # 执行回测（添加必要的参数）
+        results = backtester.run_backtest(
+            currency_pair="CNYUSD",  # 指定货币对
+            start_date="2015-01-28", # 指定开始日期
+            end_date="2024-12-31"    # 指定结束日期
+        )
+        
+        if results:
+            logger.info("回测完成，结果：")
+            logger.info(f"总收益率: {results['total_return']:.2%}")
+            logger.info(f"夏普比率: {results['sharpe_ratio']:.2f}")
+            logger.info(f"最大回撤: {results['max_drawdown']:.2%}")
+            logger.info(f"胜率: {results['win_rate']:.2%}")
+        
+    except Exception as e:
+        logger.error(f"回测过程发生错误: {str(e)}")
 
 if __name__ == "__main__":
     main()

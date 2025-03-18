@@ -29,6 +29,7 @@
                     </li>
                 </ul>
                 <div class="nav-right">
+                    <button id="rechargeBtn" class="btn btn-outline-light me-2">充值</button>
                     <button id="loginBtn" class="btn btn-outline-light">登录</button>
                 </div>
             </div>
@@ -141,8 +142,76 @@
     </div>
 
     <!-- 注册模态框 -->
-    <div class="modal fade" id="registerModal">
-        <!-- 注册表单 -->
+    <div class="modal fade" id="registerModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">用户注册</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="registerForm">
+                        <div class="mb-3">
+                            <label class="form-label">用户名</label>
+                            <input type="text" class="form-control" id="reg-username" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">密码</label>
+                            <input type="password" class="form-control" id="reg-password" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">确认密码</label>
+                            <input type="password" class="form-control" id="reg-confirm-password" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">电子邮箱</label>
+                            <input type="email" class="form-control" id="reg-email" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">注册</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 添加充值模态框 -->
+    <div class="modal fade" id="rechargeModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">账户充值</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="recharge-options">
+                        <div class="recharge-item" data-amount="100">
+                            <h3>¥100</h3>
+                            <p>基础套餐</p>
+                        </div>
+                        <div class="recharge-item" data-amount="500">
+                            <h3>¥500</h3>
+                            <p>进阶套餐</p>
+                        </div>
+                        <div class="recharge-item" data-amount="1000">
+                            <h3>¥1000</h3>
+                            <p>专业套餐</p>
+                        </div>
+                        <div class="recharge-custom">
+                            <label>自定义金额</label>
+                            <input type="number" id="custom-amount" min="1" step="1">
+                        </div>
+                    </div>
+                    <div class="payment-methods mt-3">
+                        <button class="btn btn-payment" data-method="alipay">
+                            支付宝
+                        </button>
+                        <button class="btn btn-payment" data-method="wechat">
+                            微信支付
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- 客服面板 -->

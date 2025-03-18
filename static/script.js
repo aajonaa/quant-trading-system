@@ -38,6 +38,80 @@ function setupEventListeners() {
             loginModal.show();
         });
     }
+
+    // 注册相关
+    document.getElementById('showRegister').addEventListener('click', function() {
+        const loginModal = bootstrap.Modal.getInstance(document.getElementById('loginModal'));
+        loginModal.hide();
+        const registerModal = new bootstrap.Modal(document.getElementById('registerModal'));
+        registerModal.show();
+    });
+
+    document.getElementById('registerForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const username = document.getElementById('reg-username').value;
+        const password = document.getElementById('reg-password').value;
+        const confirmPassword = document.getElementById('reg-confirm-password').value;
+        const email = document.getElementById('reg-email').value;
+
+        if (password !== confirmPassword) {
+            alert('两次输入的密码不一致');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/register', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ username, password, email })
+            });
+            
+            const data = await response.json();
+            if (data.success) {
+                alert('注册成功！请登录');
+                const registerModal = bootstrap.Modal.getInstance(document.getElementById('registerModal'));
+                registerModal.hide();
+                const loginModal = new bootstrap.Modal(document.getElementById('loginModal'));
+                loginModal.show();
+            } else {
+                alert(data.error || '注册失败，请稍后重试');
+            }
+        } catch (error) {
+            alert('注册失败，请稍后重试');
+            console.error(error);
+        }
+    });
+
+    // 充值相关
+    document.getElementById('rechargeBtn').addEventListener('click', function() {
+        const rechargeModal = new bootstrap.Modal(document.getElementById('rechargeModal'));
+        rechargeModal.show();
+    });
+
+    // 选择充值金额
+    document.querySelectorAll('.recharge-item').forEach(item => {
+        item.addEventListener('click', function() {
+            document.querySelectorAll('.recharge-item').forEach(i => i.classList.remove('selected'));
+            this.classList.add('selected');
+            document.getElementById('custom-amount').value = '';
+        });
+    });
+
+    // 支付方法选择
+    document.querySelectorAll('.btn-payment').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const amount = document.querySelector('.recharge-item.selected')?.dataset.amount 
+                || document.getElementById('custom-amount').value;
+            if (!amount) {
+                alert('请选择或输入充值金额');
+                return;
+            }
+            // 处理支付逻辑
+            alert(`正在跳转到${this.textContent.trim()}支付页面，金额：¥${amount}`);
+        });
+    });
 }
 
 // 回测功能实现

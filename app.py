@@ -4,6 +4,7 @@ from pathlib import Path
 import logging
 import sys
 import pandas as pd
+from werkzeug.security import generate_password_hash
 
 # 添加项目根目录到Python路径
 current_dir = Path(__file__).parent
@@ -15,6 +16,7 @@ sys.path.append(str(backend_dir))  # 添加backend目录到路径
 from backend.backtest.backtester import ForexBacktester
 from backend.mulcurrency_risk import MultiCurrencyRiskAnalyzer
 from backend.model_analysis import MultiStepPredictor
+from Database.Pgadmin4 import DatabaseManager
 
 # 配置日志
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -92,28 +94,50 @@ def login():
 @app.route('/api/register', methods=['POST'])
 def register():
     try:
-        username = request.form.get('username')
-        email = request.form.get('email')
-        password = request.form.get('password')
+        data = request.get_json()
+        username = data.get('username')
+        password = data.get('password')
+        email = data.get('email')
         
-        if not username or not email or not password:
+        if not all([username, password, email]):
             return jsonify({'error': '请提供所有必填字段'})
         
-        # 检查用户是否已存在
-        if username in users_db:
-            return jsonify({'error': '用户名已存在'})
+        # 连接数据库
+        db = DatabaseManager()
         
-        # 注册新用户
-        users_db[username] = {
-            'password': password,
-            'email': email
-        }
-        
-        return jsonify({
-            'success': True,
-            'message': '注册成功'
-        })
-        
+        try:
+            # 检查用户名是否已存在
+            db.cur.execute("SELECT username FROM users.account WHERE username = %s", (username,))
+            if db.cur.fetchone():
+                return jsonify({'error': '用户名已存在'})
+            
+            # 检查邮箱是否已存在
+            db.cur.execute("SELECT email FROM users.account WHERE email = %s", (email,))
+            if db.cur.fetchone():
+                return jsonify({'error': '邮箱已被注册'})
+            
+            # 加密密码
+            hashed_password = generate_password_hash(password)
+            
+            # 插入新用户
+            db.cur.execute("""
+                INSERT INTO users.account (username, password, email)
+                VALUES (%s, %s, %s)
+                RETURNING user_id
+            """, (username, hashed_password, email))
+            
+            user_id = db.cur.fetchone()[0]
+            db.conn.commit()
+            
+            return jsonify({
+                'success': True,
+                'message': '注册成功',
+                'user_id': user_id
+            })
+            
+        finally:
+            db.close()
+            
     except Exception as e:
         logger.error(f"注册API错误: {str(e)}")
         return jsonify({'error': f'服务器错误: {str(e)}'})
