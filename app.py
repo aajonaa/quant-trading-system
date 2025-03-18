@@ -328,5 +328,58 @@ def logout():
         logger.error(f"退出登录API错误: {str(e)}")
         return jsonify({'error': f'服务器错误: {str(e)}'})
 
+@app.route('/api/single_backtest', methods=['POST'])
+def single_backtest():
+    try:
+        data = request.get_json()
+        currency_pair = data.get('currency_pair')
+        start_date = data.get('start_date')
+        end_date = data.get('end_date')
+        
+        # 创建回测器实例
+        backtester = ForexBacktester()
+        
+        # 执行单一货币对回测
+        results = backtester.run_single_backtest(
+            currency_pair=currency_pair,
+            start_date=start_date,
+            end_date=end_date
+        )
+        
+        return jsonify({
+            'success': True,
+            'results': {
+                'total_return': results['total_return'],
+                'sharpe_ratio': results['sharpe_ratio'],
+                'max_drawdown': results['max_drawdown'],
+                'win_rate': results['win_rate'],
+                'trades': results['trades'],
+                'equity_curve': results['equity_curve'].tolist()
+            }
+        })
+    except Exception as e:
+        logger.error(f"单一货币对回测错误: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/multi_currency_risk', methods=['POST'])
+def multi_currency_risk():
+    try:
+        data = request.get_json()
+        selected_pairs = data.get('currency_pairs', [])
+        
+        # 从CSV文件读取风险分析结果
+        risk_data = pd.read_csv('backend/mulsignals/currency_pair_risks.csv')
+        
+        # 过滤选中的货币对
+        filtered_data = risk_data[risk_data['货币对组合'].isin(selected_pairs)]
+        
+        return jsonify({
+            'success': True,
+            'risk_analysis': filtered_data.to_dict('records')
+        })
+    except Exception as e:
+        logger.error(f"多货币风险分析错误: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     app.run(debug=True)

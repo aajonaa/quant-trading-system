@@ -671,3 +671,157 @@ function initializeCustomerService() {
         csBody.scrollTop = csBody.scrollHeight;
     }
 }
+
+// 单一货币对回测
+function runSingleBacktest() {
+    const currencyPair = document.getElementById('currency-pair-select').value;
+    const startDate = document.getElementById('start-date').value;
+    const endDate = document.getElementById('end-date').value;
+
+    if (!startDate || !endDate) {
+        alert('请选择日期范围');
+        return;
+    }
+
+    showLoading('正在进行回测...');
+
+    fetch('/api/single_backtest', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            currency_pair: currencyPair,
+            start_date: startDate,
+            end_date: endDate
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideLoading();
+        if (data.success) {
+            updateBacktestResults(data.results);
+            drawEquityCurve(data.results.equity_curve);
+        } else {
+            alert('回测失败: ' + data.error);
+        }
+    })
+    .catch(error => {
+        hideLoading();
+        console.error('Error:', error);
+        alert('回测过程中发生错误');
+    });
+}
+
+// 更新回测结果显示
+function updateBacktestResults(results) {
+    document.getElementById('backtest-results').style.display = 'block';
+    document.getElementById('total-return').textContent = 
+        (results.total_return * 100).toFixed(2) + '%';
+    // 更新其他指标...
+}
+
+// 绘制权益曲线
+function drawEquityCurve(equityCurve) {
+    const ctx = document.getElementById('equity-curve-chart').getContext('2d');
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: Array.from({length: equityCurve.length}, (_, i) => i + 1),
+            datasets: [{
+                label: '权益曲线',
+                data: equityCurve,
+                borderColor: 'rgb(75, 192, 192)',
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: false
+                }
+            }
+        }
+    });
+}
+
+// 多货币风险分析
+function analyzeMultiCurrencyRisk() {
+    const selectedPairs = Array.from(document.querySelectorAll('.currency-pairs-checkboxes input:checked'))
+        .map(checkbox => checkbox.value);
+
+    if (selectedPairs.length === 0) {
+        alert('请至少选择一个货币对组合');
+        return;
+    }
+
+    showLoading('正在分析风险...');
+
+    fetch('/api/multi_currency_risk', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            currency_pairs: selectedPairs
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideLoading();
+        if (data.success) {
+            displayRiskAnalysis(data.risk_analysis);
+        } else {
+            alert('风险分析失败: ' + data.error);
+        }
+    })
+    .catch(error => {
+        hideLoading();
+        console.error('Error:', error);
+        alert('风险分析过程中发生错误');
+    });
+}
+
+// 显示风险分析结果
+function displayRiskAnalysis(riskData) {
+    const resultsDiv = document.getElementById('risk-analysis-results');
+    resultsDiv.style.display = 'block';
+    
+    let html = '<table class="table">';
+    html += `<thead>
+        <tr>
+            <th>货币对组合</th>
+            <th>相关系数</th>
+            <th>组合波动率</th>
+            <th>信号一致性</th>
+            <th>风险得分</th>
+            <th>风险等级</th>
+            <th>交易建议</th>
+        </tr>
+    </thead><tbody>`;
+
+    riskData.forEach(item => {
+        html += `<tr>
+            <td>${item.货币对组合}</td>
+            <td>${item.相关系数.toFixed(2)}</td>
+            <td>${item.组合波动率.toFixed(2)}</td>
+            <td>${item.信号一致性.toFixed(2)}</td>
+            <td>${item.风险得分.toFixed(2)}</td>
+            <td>${item.风险等级}</td>
+            <td>${item.交易建议}</td>
+        </tr>`;
+    });
+
+    html += '</tbody></table>';
+    resultsDiv.innerHTML = html;
+}
+
+// 工具函数
+function showLoading(message) {
+    // 显示加载提示
+}
+
+function hideLoading() {
+    // 隐藏加载提示
+}

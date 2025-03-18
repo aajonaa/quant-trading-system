@@ -95,105 +95,81 @@
             </div>
         </div>
         
-        <!-- 单一货币对回测页面 -->
-        <div id="backtestPage" class="page-content" style="display: none;">
-            <h2 class="section-title mb-4">单一货币对回测</h2>
-            
-            <div class="card mb-4">
-                <div class="card-body">
-                    <form id="backtestForm">
-                        <div class="row mb-3">
-                            <div class="col-md-4">
-                                <label for="currency" class="form-label">货币对</label>
-                                <select id="currency" name="currency" class="form-select" required>
-                                    <option value="">请选择货币对</option>
-                                    <option value="CNYAUD">CNY/AUD</option>
-                                    <option value="CNYEUR">CNY/EUR</option>
-                                    <option value="CNYGBP">CNY/GBP</option>
-                                    <option value="CNYJPY">CNY/JPY</option>
-                                    <option value="CNYUSD">CNY/USD</option>
-                                </select>
-                            </div>
-                            <div class="col-md-4">
-                                <label for="startDate" class="form-label">开始日期</label>
-                                <input type="text" id="startDate" name="startDate" class="form-control datepicker" required>
-                            </div>
-                            <div class="col-md-4">
-                                <label for="endDate" class="form-label">结束日期</label>
-                                <input type="text" id="endDate" name="endDate" class="form-control datepicker" required>
-                            </div>
-                        </div>
-                        
-                        <div class="d-flex justify-content-end">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-play"></i> 运行回测
-                            </button>
-                        </div>
-                    </form>
-                </div>
+        <!-- 单一货币对回测部分 -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>单一货币对回测</h5>
             </div>
-            
-            <!-- 回测结果区域 -->
-            <div id="backtestResults" style="display: none;">
-                <!-- 回测结果将通过JavaScript动态添加 -->
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label for="currency-pair-select">选择货币对</label>
+                            <select class="form-control" id="currency-pair-select">
+                                <option value="CNYAUD">CNY/AUD</option>
+                                <option value="CNYEUR">CNY/EUR</option>
+                                <option value="CNYGBP">CNY/GBP</option>
+                                <option value="CNYJPY">CNY/JPY</option>
+                                <option value="CNYUSD">CNY/USD</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label for="start-date">开始日期</label>
+                            <input type="text" class="form-control datepicker" id="start-date">
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label for="end-date">结束日期</label>
+                            <input type="text" class="form-control datepicker" id="end-date">
+                        </div>
+                    </div>
+                </div>
+                <button class="btn btn-primary mt-3" onclick="runSingleBacktest()">开始回测</button>
+                
+                <!-- 回测结果显示区域 -->
+                <div id="backtest-results" class="mt-4" style="display: none;">
+                    <h6>回测结果</h6>
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h6 class="card-title">总收益率</h6>
+                                    <p id="total-return" class="card-text"></p>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- 其他指标卡片 -->
+                    </div>
+                    <div id="equity-curve-chart" class="mt-4"></div>
+                </div>
             </div>
         </div>
         
-        <!-- 多货币对风险分析页面 -->
-        <div id="riskPage" class="page-content" style="display: none;">
-            <h2 class="section-title mb-4">多货币对风险分析</h2>
-            
-            <div class="card mb-4">
-                <div class="card-body">
-                    <form id="riskForm">
-                        <div class="row mb-3">
-                            <div class="col-md-6">
-                                <label class="form-label">选择货币对</label>
-                                <div class="currency-checkboxes">
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" value="CNYAUD" id="checkCNYAUD" name="currencies" checked>
-                                        <label class="form-check-label" for="checkCNYAUD">CNY/AUD</label>
-                                    </div>
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" value="CNYEUR" id="checkCNYEUR" name="currencies" checked>
-                                        <label class="form-check-label" for="checkCNYEUR">CNY/EUR</label>
-                                    </div>
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" value="CNYGBP" id="checkCNYGBP" name="currencies" checked>
-                                        <label class="form-check-label" for="checkCNYGBP">CNY/GBP</label>
-                                    </div>
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" value="CNYJPY" id="checkCNYJPY" name="currencies" checked>
-                                        <label class="form-check-label" for="checkCNYJPY">CNY/JPY</label>
-                                    </div>
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" value="CNYUSD" id="checkCNYUSD" name="currencies" checked>
-                                        <label class="form-check-label" for="checkCNYUSD">CNY/USD</label>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <label for="analysisType" class="form-label">分析类型</label>
-                                <select id="analysisType" name="analysisType" class="form-select">
-                                    <option value="correlation">相关性分析</option>
-                                    <option value="risk">风险评估</option>
-                                    <option value="combined">综合分析</option>
-                                </select>
-                            </div>
-                        </div>
-                        
-                        <div class="d-flex justify-content-end">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-search"></i> 开始分析
-                            </button>
-                        </div>
-                    </form>
-                </div>
+        <!-- 多货币风险分析部分 -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>多货币风险分析</h5>
             </div>
-            
-            <!-- 风险分析结果区域 -->
-            <div id="riskResults" style="display: none;">
-                <!-- 风险分析结果将通过JavaScript动态添加 -->
+            <div class="card-body">
+                <div class="form-group">
+                    <label>选择货币对组合</label>
+                    <div class="currency-pairs-checkboxes">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" value="CNYAUD-CNYEUR" id="pair1">
+                            <label class="form-check-label" for="pair1">CNY/AUD - CNY/EUR</label>
+                        </div>
+                        <!-- 其他货币对组合选项 -->
+                    </div>
+                </div>
+                <button class="btn btn-primary mt-3" onclick="analyzeMultiCurrencyRisk()">分析风险</button>
+                
+                <!-- 风险分析结果显示区域 -->
+                <div id="risk-analysis-results" class="mt-4" style="display: none;">
+                    <!-- 结果将通过JavaScript动态填充 -->
+                </div>
             </div>
         </div>
         
