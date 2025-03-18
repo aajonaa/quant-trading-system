@@ -3,6 +3,7 @@ from flask import Flask, render_template, request, jsonify, session
 from pathlib import Path
 import logging
 import sys
+import pandas as pd
 
 # 添加项目根目录到Python路径
 current_dir = Path(__file__).parent
@@ -112,65 +113,14 @@ def backtest():
 @app.route('/api/risk_analysis', methods=['POST'])
 def risk_analysis():
     try:
-        # 获取请求参数
-        currencies = request.form.getlist('currencies')
-        analysis_type = request.form.get('analysisType', 'combined')
+        # 直接读取mulsignals中的结果
+        risk_data = pd.read_csv('backend/mulsignals/currency_pair_risks.csv')
         
-        if not currencies:
-            return jsonify({'error': '请选择至少一个货币对'})
-        
-        # 创建风险分析器实例
-        analyzer = MultiCurrencyRiskAnalyzer()
-        
-        # 加载信号数据
-        if not analyzer.load_signals():
-            return jsonify({'error': '加载信号数据失败'})
-        
-        # 过滤选定的货币对
-        selected_data = {pair: data for pair, data in analyzer.pairs_data.items() if pair in currencies}
-        
-        if not selected_data:
-            return jsonify({'error': '未找到选定货币对的数据'})
-        
-        # 计算相关性
-        analyzer.pairs_data = selected_data
-        if not analyzer.calculate_correlation():
-            return jsonify({'error': '计算相关性失败'})
-        
-        # 生成风险信号
-        if not analyzer.generate_risk_signals():
-            return jsonify({'error': '生成风险信号失败'})
-        
-        # 获取相关性矩阵
-        correlation_matrix = analyzer.correlation_matrix.to_dict()
-        
-        # 获取风险信号
-        risk_signals = analyzer.risk_signals
-        
-        # 准备返回数据
-        pair_risks = []
-        for pair_combo, risk_data in risk_signals.items():
-            pair_risks.append({
-                'pair': pair_combo,
-                'correlation': risk_data['correlation'],
-                'volatility': 0.15,  # 示例值，实际应从数据计算
-                'risk_score': abs(risk_data['risk_signal']) * 50,
-                'risk_level': '高风险' if abs(risk_data['risk_signal']) > 0.7 else '中风险' if abs(risk_data['risk_signal']) > 0.3 else '低风险',
-                'recommendation': '建议减小敞口' if abs(risk_data['risk_signal']) > 0.5 else '建议持有' if abs(risk_data['risk_signal']) > 0.2 else '可以增加敞口'
-            })
-        
-        # 返回结果
         return jsonify({
-            'correlation_matrix': correlation_matrix,
-            'pair_risks': pair_risks,
-            'analysis_type': analysis_type
+            'pair_risks': risk_data.to_dict('records')
         })
-        
     except Exception as e:
-        logger.error(f"风险分析API错误: {str(e)}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return jsonify({'error': f'服务器错误: {str(e)}'})
+        return jsonify({'error': str(e)})
 
 @app.route('/api/optimize', methods=['POST'])
 def optimize():

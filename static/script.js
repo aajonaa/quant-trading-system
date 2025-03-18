@@ -49,34 +49,78 @@ document.addEventListener('DOMContentLoaded', function() {
         runOptimization();
     });
 
-    // 设置登录和注册按钮事件
+    // 登录按钮点击事件
+    const loginBtn = document.getElementById('loginBtn');
+    const loginModal = new bootstrap.Modal(document.getElementById('loginModal'));
+    const showRegisterLink = document.getElementById('showRegister');
+    const registerModal = new bootstrap.Modal(document.getElementById('registerModal'));
+
+    loginBtn.addEventListener('click', function() {
+        loginModal.show();
+    });
+
+    showRegisterLink.addEventListener('click', function(e) {
+        e.preventDefault();
+        loginModal.hide();
+        registerModal.show();
+    });
+
+    // 处理登录表单提交
     document.getElementById('loginButton').addEventListener('click', function() {
-        handleLogin();
+        const username = document.getElementById('loginUsername').value;
+        const password = document.getElementById('loginPassword').value;
+
+        fetch('/api/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                loginModal.hide();
+                updateUserInterface(data.username);
+            } else {
+                alert(data.error || '登录失败');
+            }
+        });
     });
 
+    // 处理注册表单提交
     document.getElementById('registerButton').addEventListener('click', function() {
-        handleRegister();
-    });
+        const username = document.getElementById('registerUsername').value;
+        const email = document.getElementById('registerEmail').value;
+        const password = document.getElementById('registerPassword').value;
+        const confirmPassword = document.getElementById('confirmPassword').value;
 
-    // 设置客服聊天功能
-    document.getElementById('csButton').addEventListener('click', function() {
-        document.getElementById('csPanel').style.display = 'flex';
-    });
-
-    document.getElementById('csClose').addEventListener('click', function() {
-        document.getElementById('csPanel').style.display = 'none';
-    });
-
-    document.getElementById('csSend').addEventListener('click', function() {
-        sendChatMessage();
-    });
-
-    document.getElementById('csInput').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            sendChatMessage();
+        if (password !== confirmPassword) {
+            alert('两次输入的密码不一致');
+            return;
         }
+
+        fetch('/api/register', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: `username=${encodeURIComponent(username)}&email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                registerModal.hide();
+                loginModal.show();
+                alert('注册成功，请登录');
+            } else {
+                alert(data.error || '注册失败');
+            }
+        });
     });
+
+    // 客服功能
+    initializeCustomerService();
 });
 
 // 显示指定页面
@@ -734,7 +778,7 @@ function displayOptimizationResults(data) {
         </div>
     `;
     resultsContainer.appendChild(optimizationCard);
-
+    
     // 创建优化前后权益曲线对比图
     const equityCurveCard = document.createElement('div');
     equityCurveCard.className = 'chart-container';
@@ -743,10 +787,10 @@ function displayOptimizationResults(data) {
         <canvas id="optimizationChart"></canvas>
     `;
     resultsContainer.appendChild(equityCurveCard);
-
+    
     // 初始化优化对比图
     initOptimizationChart(data.before_equity, data.after_equity);
-
+    
     // 创建应用优化按钮
     const applyButtonContainer = document.createElement('div');
     applyButtonContainer.className = 'd-flex justify-content-center mt-4';
@@ -756,7 +800,7 @@ function displayOptimizationResults(data) {
         </button>
     `;
     resultsContainer.appendChild(applyButtonContainer);
-
+    
     // 添加应用优化按钮事件
     document.getElementById('applyOptimizationButton').addEventListener('click', function() {
         applyOptimization(data.currency, data.best_params);
@@ -766,7 +810,7 @@ function displayOptimizationResults(data) {
 // 初始化优化对比图
 function initOptimizationChart(beforeEquity, afterEquity) {
     const ctx = document.getElementById('optimizationChart').getContext('2d');
-
+    
     new Chart(ctx, {
         type: 'line',
         data: {
@@ -837,7 +881,7 @@ function initOptimizationChart(beforeEquity, afterEquity) {
 function applyOptimization(currency, params) {
     // 显示加载动画
     document.getElementById('loading').style.display = 'flex';
-
+    
     // 准备表单数据
     const formData = new FormData();
     formData.append('currency', currency);
@@ -845,7 +889,7 @@ function applyOptimization(currency, params) {
     formData.append('take_profit', params.take_profit);
     formData.append('position_size', params.position_size);
     formData.append('trailing_stop', params.trailing_stop);
-
+    
     // 发送请求
     fetch('/api/apply_optimization', {
         method: 'POST',
@@ -855,12 +899,12 @@ function applyOptimization(currency, params) {
     .then(data => {
         // 隐藏加载动画
         document.getElementById('loading').style.display = 'none';
-
+        
         if (data.error) {
             alert('应用优化参数失败: ' + data.error);
             return;
         }
-
+        
         alert('优化参数已成功应用！');
     })
     .catch(error => {
@@ -869,194 +913,85 @@ function applyOptimization(currency, params) {
     });
 }
 
-// 处理登录
-function handleLogin() {
-    const username = document.getElementById('loginUsername').value;
-    const password = document.getElementById('loginPassword').value;
-
-    if (!username || !password) {
-        alert('请填写用户名和密码');
-        return;
-    }
-
-    // 准备表单数据
-    const formData = new FormData();
-    formData.append('username', username);
-    formData.append('password', password);
-
-    // 发送请求
-    fetch('/api/login', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.error) {
-            alert('登录失败: ' + data.error);
-            return;
-        }
-
-        // 登录成功
-        alert('登录成功！');
-
-        // 关闭模态框
-        const loginModal = bootstrap.Modal.getInstance(document.getElementById('loginModal'));
-        loginModal.hide();
-
-        // 更新UI显示用户已登录
-        updateUIAfterLogin(data.username);
-    })
-    .catch(error => {
-        alert('请求失败: ' + error);
-    });
-}
-
-// 处理注册
-function handleRegister() {
-    const username = document.getElementById('registerUsername').value;
-    const email = document.getElementById('registerEmail').value;
-    const password = document.getElementById('registerPassword').value;
-    const confirmPassword = document.getElementById('confirmPassword').value;
-    const agreeTerms = document.getElementById('agreeTerms').checked;
-
-    if (!username || !email || !password || !confirmPassword) {
-        alert('请填写所有必填字段');
-        return;
-    }
-
-    if (password !== confirmPassword) {
-        alert('两次输入的密码不一致');
-        return;
-    }
-
-    if (!agreeTerms) {
-        alert('请同意服务条款和隐私政策');
-        return;
-    }
-
-    // 准备表单数据
-    const formData = new FormData();
-    formData.append('username', username);
-    formData.append('email', email);
-    formData.append('password', password);
-
-    // 发送请求
-    fetch('/api/register', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.error) {
-            alert('注册失败: ' + data.error);
-            return;
-        }
-
-        // 注册成功
-        alert('注册成功！请登录');
-
-        // 关闭注册模态框
-        const registerModal = bootstrap.Modal.getInstance(document.getElementById('registerModal'));
-        registerModal.hide();
-
-        // 打开登录模态框
-        const loginModal = new bootstrap.Modal(document.getElementById('loginModal'));
-        loginModal.show();
-    })
-    .catch(error => {
-        alert('请求失败: ' + error);
-    });
-}
-
-// 更新UI显示用户已登录
-function updateUIAfterLogin(username) {
+// 更新用户界面
+function updateUserInterface(username) {
     const navbarRight = document.querySelector('.navbar .d-flex');
     navbarRight.innerHTML = `
         <div class="dropdown">
-            <button class="btn btn-outline-light dropdown-toggle" type="button" id="userDropdown" data-bs-toggle="dropdown">
+            <button class="btn btn-outline-light dropdown-toggle" type="button" data-bs-toggle="dropdown">
                 <i class="fas fa-user"></i> ${username}
             </button>
-            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
-                <li><a class="dropdown-item" href="#"><i class="fas fa-cog"></i> 账户设置</a></li>
-                <li><a class="dropdown-item" href="#"><i class="fas fa-history"></i> 历史记录</a></li>
-                <li><hr class="dropdown-divider"></li>
-                <li><a class="dropdown-item" href="#" id="logoutButton"><i class="fas fa-sign-out-alt"></i> 退出登录</a></li>
-            </ul>
+            <div class="dropdown-menu dropdown-menu-end">
+                <a class="dropdown-item" href="#"><i class="fas fa-cog"></i> 设置</a>
+                <div class="dropdown-divider"></div>
+                <a class="dropdown-item" href="#" id="logoutBtn">
+                    <i class="fas fa-sign-out-alt"></i> 退出
+                </a>
+            </div>
         </div>
     `;
 
-    // 添加退出登录按钮事件
-    document.getElementById('logoutButton').addEventListener('click', function() {
-        handleLogout();
+    // 添加退出事件
+    document.getElementById('logoutBtn').addEventListener('click', function() {
+        fetch('/api/logout', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                }
+            });
     });
 }
 
-// 处理退出登录
-function handleLogout() {
-    // 发送请求
-    fetch('/api/logout', {
-        method: 'POST'
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.error) {
-            alert('退出登录失败: ' + data.error);
-            return;
-        }
+// 客服功能
+function initializeCustomerService() {
+    const csButton = document.getElementById('csButton');
+    const csPanel = document.getElementById('csPanel');
+    const csClose = document.getElementById('csClose');
+    const csInput = document.getElementById('csInput');
+    const csBody = document.getElementById('csBody');
+    const csSend = document.getElementById('csSend');
 
-        // 退出登录成功
-        alert('已退出登录');
+    if (csButton && csPanel && csClose) {
+        csButton.addEventListener('click', function() {
+            csPanel.style.display = csPanel.style.display === 'none' ? 'flex' : 'none';
+        });
 
-        // 恢复原始UI
-        const navbarRight = document.querySelector('.navbar .d-flex');
-        navbarRight.innerHTML = `
-            <button class="btn btn-outline-light me-2" data-bs-toggle="modal" data-bs-target="#loginModal">
-                <i class="fas fa-user"></i> 登录
-            </button>
-            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#registerModal">
-                <i class="fas fa-user-plus"></i> 注册
-            </button>
-        `;
-    })
-    .catch(error => {
-        alert('请求失败: ' + error);
-    });
-}
+        csClose.addEventListener('click', function() {
+            csPanel.style.display = 'none';
+        });
 
-// 发送客服聊天消息
-function sendChatMessage() {
-    const input = document.getElementById('csInput');
-    const message = input.value.trim();
+        csSend.addEventListener('click', sendMessage);
+        csInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+    }
 
-    if (!message) return;
+    function sendMessage() {
+        const message = csInput.value.trim();
+        if (!message) return;
 
-    // 清空输入框
-    input.value = '';
+        // 添加用户消息
+        addMessage(message, 'sent');
+        csInput.value = '';
 
-    // 添加用户消息
-    const chatBody = document.getElementById('csBody');
-    const messageElement = document.createElement('div');
-    messageElement.className = 'cs-message cs-sent';
-    messageElement.innerHTML = `
-        <div class="cs-message-content">${message}</div>
-        <div class="cs-message-time">刚刚</div>
-    `;
-    chatBody.appendChild(messageElement);
+        // 模拟客服回复
+        setTimeout(() => {
+            addMessage('感谢您的咨询，我们的客服人员将尽快回复您。', 'received');
+        }, 1000);
+    }
 
-    // 滚动到底部
-    chatBody.scrollTop = chatBody.scrollHeight;
-
-    // 模拟客服回复
-    setTimeout(() => {
-        const replyElement = document.createElement('div');
-        replyElement.className = 'cs-message cs-received';
-        replyElement.innerHTML = `
-            <div class="cs-message-content">感谢您的咨询，我们的客服人员将尽快回复您。</div>
+    function addMessage(text, type) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `cs-message cs-${type}`;
+        messageDiv.innerHTML = `
+            <div class="cs-message-content">${text}</div>
             <div class="cs-message-time">刚刚</div>
         `;
-        chatBody.appendChild(replyElement);
-
-        // 滚动到底部
-        chatBody.scrollTop = chatBody.scrollHeight;
-    }, 1000);
+        csBody.appendChild(messageDiv);
+        csBody.scrollTop = csBody.scrollHeight;
+    }
 }
