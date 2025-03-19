@@ -83,8 +83,12 @@ def login():
         
         user = db.cur.fetchone()
         
-        if not user or not check_password_hash(user[2], password):
-            return jsonify({'success': False, 'error': '用户名或密码错误'})
+        if not user:
+            return jsonify({'success': False, 'error': '用户名不存在'})
+        
+        # 验证密码
+        if not check_password_hash(user[2], password):
+            return jsonify({'success': False, 'error': '密码错误'})
         
         # 更新最后登录时间
         db.cur.execute("""
@@ -97,7 +101,8 @@ def login():
         return jsonify({
             'success': True,
             'user': {
-                'username': user[1]
+                'username': user[1],
+                'user_id': user[0]
             }
         })
         
@@ -192,6 +197,28 @@ def multi_currency_risk():
     except Exception as e:
         logger.error(f"多货币风险分析错误: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/risk_analysis', methods=['GET'])
+def risk_analysis():
+    try:
+        # 读取风险分析数据
+        risk_file = Path(__file__).parent / 'backend' / 'mulsignals' / 'currency_pair_risks.csv'
+        if not risk_file.exists():
+            return jsonify({'success': False, 'error': '风险数据文件不存在'})
+        
+        # 读取CSV文件
+        risk_data = pd.read_csv(risk_file)
+        
+        # 转换为JSON格式
+        risk_json = risk_data.to_dict(orient='records')
+        
+        return jsonify({
+            'success': True,
+            'data': risk_json
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
 
 if __name__ == '__main__':
     app.run(debug=True)

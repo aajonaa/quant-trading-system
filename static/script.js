@@ -17,6 +17,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 检查登录状态
     checkLoginStatus();
+
+    // 如果在风险控制页面，加载风险分析数据
+    if (document.getElementById('risk-analysis-container')) {
+        loadRiskAnalysis();
+    }
 });
 
 // 事件监听设置
@@ -326,6 +331,7 @@ function displayBacktestResults(results) {
                     type: 'time',
                     time: {
                         unit: 'month',
+                        stepSize: 1,
                         displayFormats: {
                             month: 'yyyy-MM'
                         },
@@ -338,8 +344,8 @@ function displayBacktestResults(results) {
                     ticks: {
                         maxRotation: 45,
                         minRotation: 45,
-                        autoSkip: true,
-                        maxTicksLimit: 12
+                        autoSkip: false,
+                        maxTicksLimit: 24
                     }
                 },
                 y: {
@@ -428,32 +434,61 @@ async function optimizeStrategy() {
 
 // 显示风险分析结果
 function displayRiskAnalysis(riskData) {
-    const riskPanel = document.querySelector('.risk-analysis-panel');
-    let html = '<div class="table-responsive"><table class="table table-striped">';
-    html += `<thead>
-        <tr>
-            <th>货币对组合</th>
-            <th>相关系数</th>
-            <th>组合波动率</th>
-            <th>信号一致性</th>
-            <th>风险等级</th>
-            <th>交易建议</th>
-        </tr>
-    </thead><tbody>`;
-
+    const riskContainer = document.getElementById('risk-analysis-container');
+    if (!riskContainer) return;
+    
+    // 创建表格
+    let tableHTML = `
+        <div class="table-responsive mt-4">
+            <table class="table table-striped table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>货币对组合</th>
+                        <th>相关系数</th>
+                        <th>组合波动率</th>
+                        <th>信号一致性</th>
+                        <th>风险得分</th>
+                        <th>风险等级</th>
+                        <th>交易建议</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    // 添加数据行
     riskData.forEach(item => {
-        html += `<tr>
-            <td>${item.货币对组合}</td>
-            <td>${item.相关系数.toFixed(2)}</td>
-            <td>${item.组合波动率.toFixed(2)}</td>
-            <td>${item.信号一致性.toFixed(2)}</td>
-            <td>${item.风险等级}</td>
-            <td>${item.交易建议}</td>
-        </tr>`;
+        // 根据风险等级设置不同的颜色
+        let riskClass = '';
+        if (item.风险等级.includes('极低')) {
+            riskClass = 'table-success';
+        } else if (item.风险等级.includes('低')) {
+            riskClass = 'table-info';
+        } else if (item.风险等级.includes('中')) {
+            riskClass = 'table-warning';
+        } else {
+            riskClass = 'table-danger';
+        }
+        
+        tableHTML += `
+            <tr class="${riskClass}">
+                <td>${item.货币对组合}</td>
+                <td>${parseFloat(item.相关系数).toFixed(4)}</td>
+                <td>${parseFloat(item.组合波动率).toFixed(4)}</td>
+                <td>${parseFloat(item.信号一致性).toFixed(4)}</td>
+                <td>${parseFloat(item.风险得分).toFixed(2)}</td>
+                <td>${item.风险等级}</td>
+                <td>${item.交易建议}</td>
+            </tr>
+        `;
     });
-
-    html += '</tbody></table></div>';
-    riskPanel.innerHTML = html;
+    
+    tableHTML += `
+                </tbody>
+            </table>
+        </div>
+    `;
+    
+    riskContainer.innerHTML = tableHTML;
 }
 
 // 显示优化结果
@@ -666,6 +701,26 @@ async function handleLogin(event) {
         }
     } catch (error) {
         showError('登录请求失败');
+    } finally {
+        hideLoading();
+    }
+}
+
+// 添加风险控制功能
+async function loadRiskAnalysis() {
+    try {
+        showLoading('加载风险分析数据...');
+        
+        const response = await fetch('/api/risk_analysis');
+        const data = await response.json();
+        
+        if (data.success) {
+            displayRiskAnalysis(data.data);
+        } else {
+            showError(data.error || '加载风险分析数据失败');
+        }
+    } catch (error) {
+        showError('加载风险分析数据出错: ' + error.message);
     } finally {
         hideLoading();
     }
