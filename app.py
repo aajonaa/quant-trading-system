@@ -68,47 +68,44 @@ def login():
         username = data.get('username')
         password = data.get('password')
         
-        if not all([username, password]):
-            return jsonify({'success': False, 'error': '请提供用户名和密码'})
+        if not username or not password:
+            return jsonify({'success': False, 'error': '请输入用户名和密码'})
         
+        # 连接数据库
         db = DatabaseManager()
-        # 先检查用户是否存在
-        db.cur.execute("SELECT user_id, password FROM users.account WHERE username = %s", (username,))
-        result = db.cur.fetchone()
         
-        if not result:
-            db.close()
-            return jsonify({'success': False, 'error': '用户名不存在'})
-            
-        user_id, stored_password = result
+        # 查询用户
+        db.cur.execute("""
+            SELECT user_id, username, password 
+            FROM users.account 
+            WHERE username = %s
+        """, (username,))
         
-        # 验证密码
-        if check_password_hash(stored_password, password):
-            # 更新最后登录时间
-            db.cur.execute("""
-                UPDATE users.account 
-                SET last_login = CURRENT_TIMESTAMP 
-                WHERE user_id = %s
-            """, (user_id,))
-            db.conn.commit()
-            db.close()
-            
-            # 设置session
-            session['user_id'] = user_id
-            session['username'] = username
-            
-            return jsonify({
-                'success': True, 
-                'message': '登录成功',
-                'user': {'username': username}
-            })
-        else:
-            db.close()
-            return jsonify({'success': False, 'error': '密码错误'})
-            
+        user = db.cur.fetchone()
+        
+        if not user or not check_password_hash(user[2], password):
+            return jsonify({'success': False, 'error': '用户名或密码错误'})
+        
+        # 更新最后登录时间
+        db.cur.execute("""
+            UPDATE users.account 
+            SET last_login = CURRENT_TIMESTAMP 
+            WHERE user_id = %s
+        """, (user[0],))
+        db.conn.commit()
+        
+        return jsonify({
+            'success': True,
+            'user': {
+                'username': user[1]
+            }
+        })
+        
     except Exception as e:
-        logger.error(f"登录API错误: {str(e)}")
-        return jsonify({'success': False, 'error': '登录失败，请稍后重试'})
+        return jsonify({'success': False, 'error': str(e)})
+    finally:
+        if 'db' in locals():
+            db.close()
 
 @app.route('/api/register', methods=['POST'])
 def register():

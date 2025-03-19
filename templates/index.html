@@ -39,13 +39,12 @@
                     <!-- 登录状态 -->
                     <div id="user-nav" class="d-flex align-items-center" style="display: none !important;">
                         <div class="dropdown">
-                            <button class="btn btn-link text-light dropdown-toggle d-flex align-items-center" type="button" id="userDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                                <i class="fas fa-user-circle me-2" style="font-size: 1.5rem;"></i>
-                                <span id="username-display"></span>
+                            <button class="btn btn-outline-light dropdown-toggle" type="button" id="userDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="fas fa-user me-2"></i>我的主页
                             </button>
                             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
-                                <li><a class="dropdown-item" href="#"><i class="fas fa-user me-2"></i>个人中心</a></li>
-                                <li><a class="dropdown-item" href="#"><i class="fas fa-cog me-2"></i>设置</a></li>
+                                <li><a class="dropdown-item" href="/my-account"><i class="fas fa-home me-2"></i>个人中心</a></li>
+                                <li><a class="dropdown-item" href="/settings"><i class="fas fa-cog me-2"></i>设置</a></li>
                                 <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item" href="#" onclick="logout()"><i class="fas fa-sign-out-alt me-2"></i>退出登录</a></li>
                             </ul>

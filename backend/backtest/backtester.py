@@ -9,7 +9,7 @@ import matplotlib.gridspec as gridspec
 class ForexBacktester:
     def __init__(self):
         self.signals_dir = Path(__file__).parent.parent / 'signals'
-        self.initial_capital = 100000
+        self.initial_capital = 100000  # 设置初始资金为10万
         self.pairs_data = {}
         self.logger = logging.getLogger(__name__)
         # 初始化时就加载数据
@@ -59,16 +59,13 @@ class ForexBacktester:
             
             # 日期过滤
             if start_date and end_date:
-                start_date = pd.to_datetime(start_date)
-                end_date = pd.to_datetime(end_date)
                 df = df[(df['Date'] >= start_date) & (df['Date'] <= end_date)]
             
             if df.empty:
                 raise Exception("选定日期范围内没有数据")
             
             # 初始化变量
-            equity = [self.initial_capital]
-            returns = []
+            equity = [self.initial_capital]  # 从初始资金开始
             position = 0
             
             # 执行回测
@@ -81,29 +78,24 @@ class ForexBacktester:
                     position = 0
                 
                 daily_return = position * (df['Price'].iloc[i] / df['Price'].iloc[i-1] - 1)
-                returns.append(daily_return)
                 equity.append(equity[-1] * (1 + daily_return))
             
             # 计算回测指标
             equity_curve = pd.Series(equity, index=df.index)
-            returns = pd.Series(returns, index=df.index[1:])
-            
-            # 修正最大回撤计算
-            rolling_max = pd.Series(equity).expanding().max()
-            drawdowns = pd.Series(equity) / rolling_max - 1
-            max_drawdown = abs(drawdowns.min())  # 取绝对值
+            returns = pd.Series([(eq - equity[i-1])/equity[i-1] for i, eq in enumerate(equity[1:], 1)], index=df.index[1:])
             
             total_return = (equity[-1] / self.initial_capital - 1)
             sharpe_ratio = np.sqrt(252) * returns.mean() / returns.std() if len(returns) > 0 else 0
+            max_drawdown = abs((equity_curve / equity_curve.cummax() - 1).min())
             win_rate = len(returns[returns > 0]) / len(returns) if len(returns) > 0 else 0
             
             return {
                 'success': True,
                 'total_return': float(total_return),
                 'sharpe_ratio': float(sharpe_ratio),
-                'max_drawdown': float(max_drawdown),  # 现在是正值
+                'max_drawdown': float(max_drawdown),
                 'win_rate': float(win_rate),
-                'equity_curve': {str(k): float(v) for k, v in equity_curve.to_dict().items()}
+                'equity_curve': {str(k): float(v) for k, v in equity_curve.items()}
             }
             
         except Exception as e:

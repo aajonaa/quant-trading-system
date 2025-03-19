@@ -176,17 +176,16 @@ body {
 }
 
 .cs-chat-window {
-    position: fixed;
-    bottom: 80px;
-    right: 20px;
-    width: 350px;
-    height: 500px;
+    position: absolute;
+    bottom: 70px;
+    right: 0;
+    width: 300px;
     background: white;
-    border-radius: 12px;
-    box-shadow: 0 2px 20px rgba(0,0,0,0.15);
-    display: flex;
+    border-radius: 8px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+    display: none;
     flex-direction: column;
-    overflow: hidden;
+    z-index: 1000;
 }
 
 .cs-header {
@@ -369,34 +368,58 @@ body {
     display: none;
 }
 
-#user-nav .dropdown-toggle {
-    text-decoration: none;
-    padding: 0.5rem;
+#user-nav.show {
+    display: flex !important;
 }
 
-#user-nav .dropdown-toggle::after {
-    display: none;
+#user-nav .dropdown-toggle {
+    display: flex;
+    align-items: center;
+    color: white;
+    text-decoration: none;
+    padding: 0.5rem 1rem;
+    border: 1px solid white;
+    border-radius: 4px;
+    transition: all 0.3s;
+    background: transparent;
+}
+
+#user-nav .dropdown-toggle:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+#user-nav .dropdown-toggle i {
+    font-size: 1.1rem;
+    margin-right: 0.5rem;
 }
 
 #user-nav .dropdown-menu {
-    min-width: 200px;
-    padding: 0.5rem 0;
     margin-top: 0.5rem;
+    border: none;
     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    min-width: 200px;
+    background: white;
 }
 
 #user-nav .dropdown-item {
     padding: 0.5rem 1rem;
     color: var(--text-color);
+    display: flex;
+    align-items: center;
+}
+
+#user-nav .dropdown-item i {
+    width: 1.5rem;
+    margin-right: 0.5rem;
+    text-align: center;
 }
 
 #user-nav .dropdown-item:hover {
     background-color: rgba(24,144,255,0.1);
 }
 
-#user-nav .dropdown-item i {
-    width: 1.5rem;
-    text-align: center;
-}
-
 /* 添加其他必要的样式... */
+.cs-button {
+    z-index: 999;
+    position: relative;
+}
