@@ -142,8 +142,38 @@
                     <h2>策略优化</h2>
                     <p>基于遗传算法的参数优化</p>
                 </div>
-                <div class="optimization-panel">
-                    <!-- 优化内容 -->
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="params-card">
+                            <form id="optimizeForm">
+                                <div class="form-group">
+                                    <label>选择货币对</label>
+                                    <select class="form-control" id="optimize-currency-pair">
+                                        <option value="CNYAUD">CNY/AUD</option>
+                                        <option value="CNYEUR">CNY/EUR</option>
+                                        <option value="CNYGBP">CNY/GBP</option>
+                                        <option value="CNYJPY">CNY/JPY</option>
+                                        <option value="CNYUSD">CNY/USD</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>优化区间</label>
+                                    <input type="text" class="form-control datepicker" id="optimize-start-date">
+                                    <input type="text" class="form-control datepicker mt-2" id="optimize-end-date">
+                                </div>
+                                <button type="submit" class="btn btn-primary btn-block">开始优化</button>
+                            </form>
+                        </div>
+                    </div>
+                    <div class="col-md-8">
+                        <div class="results-card">
+                            <div id="optimization-results">
+                                <div class="text-center py-5">
+                                    <p>请选择货币对和日期范围，然后点击"开始优化"</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </section>

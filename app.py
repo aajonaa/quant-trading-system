@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, jsonify, session
-from backend.backtest.backtest_optimum import BacktestOptimizer
+from backend.backtest.backtest_optimum import StrategyOptimizer
 from pathlib import Path
 import logging
 import sys
@@ -42,23 +42,38 @@ def index():
 def optimize_strategy():
     try:
         data = request.get_json()
-        optimizer = BacktestOptimizer()
-
+        currency_pair = data.get('currency_pair')
+        start_date = data.get('start_date')
+        end_date = data.get('end_date')
+        
+        if not all([currency_pair, start_date, end_date]):
+            return jsonify({'success': False, 'error': '请提供所有必要参数'})
+        
+        # 导入优化模块
+        from backend.backtest.backtest_optimum import StrategyOptimizer
+        
+        # 创建优化器实例
+        optimizer = StrategyOptimizer()
+        
+        # 执行优化
         results = optimizer.optimize(
-            currency_pair=data['currency_pair'],
-            start_date=data['start_date'],
-            end_date=data['end_date'],
-            population_size=data.get('population_size', 50),
-            generations=data.get('generations', 30)
+            currency_pair=currency_pair,
+            start_date=start_date,
+            end_date=end_date
         )
-
-        return jsonify(results)
-
+        
+        if results['success']:
+            return jsonify({
+                'success': True,
+                'original': results['original'],
+                'optimized': results['optimized'],
+                'improvement': results['improvement']
+            })
+        else:
+            return jsonify({'success': False, 'error': results['error']})
+        
     except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        })
+        return jsonify({'success': False, 'error': str(e)})
 
 
 @app.route('/api/login', methods=['POST'])

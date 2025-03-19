@@ -22,6 +22,9 @@ document.addEventListener('DOMContentLoaded', function() {
     if (document.getElementById('risk-analysis-container')) {
         loadRiskAnalysis();
     }
+
+    // 设置优化表单
+    setupOptimizationForm();
 });
 
 // 事件监听设置
@@ -293,7 +296,7 @@ function displayBacktestResults(results) {
                 label: '账户权益',
                 data: chartData,
                 borderColor: 'rgb(75, 192, 192)',
-                backgroundColor: 'transparent',
+                backgroundColor: 'rgba(75, 192, 192, 0.1)',
                 tension: 0.1,
                 fill: false,
                 pointRadius: 0,
@@ -330,10 +333,9 @@ function displayBacktestResults(results) {
                 x: {
                     type: 'time',
                     time: {
-                        unit: 'month',
-                        stepSize: 1,
+                        unit: 'week',
                         displayFormats: {
-                            month: 'yyyy-MM'
+                            week: 'yyyy-MM-dd'
                         },
                         tooltipFormat: 'yyyy-MM-dd'
                     },
@@ -342,10 +344,11 @@ function displayBacktestResults(results) {
                         drawOnChartArea: true
                     },
                     ticks: {
+                        source: 'auto',
+                        autoSkip: true,
+                        maxTicksLimit: 20,
                         maxRotation: 45,
-                        minRotation: 45,
-                        autoSkip: false,
-                        maxTicksLimit: 24
+                        minRotation: 45
                     }
                 },
                 y: {
@@ -397,15 +400,30 @@ async function analyzeMultiCurrencyRisk() {
     }
 }
 
-// 参数优化
-async function optimizeStrategy() {
-    const currencyPair = document.getElementById('currency-pair').value;
-    const startDate = document.getElementById('start-date').value;
-    const endDate = document.getElementById('end-date').value;
+// 策略优化功能
+document.getElementById('optimizeForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    runOptimization();
+});
 
-    showLoading('正在优化策略参数...');
-
+async function runOptimization() {
     try {
+        const currencyPair = document.getElementById('optimize-currency-pair').value;
+        const startDate = document.getElementById('optimize-start-date').value;
+        const endDate = document.getElementById('optimize-end-date').value;
+
+        // 验证日期范围
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const today = new Date();
+        
+        if (start > end || end > today) {
+            showError('请选择有效的日期范围');
+            return;
+        }
+
+        showLoading('正在执行策略优化...');
+
         const response = await fetch('/api/optimize_strategy', {
             method: 'POST',
             headers: {
@@ -419,118 +437,131 @@ async function optimizeStrategy() {
         });
 
         const data = await response.json();
+
         if (data.success) {
             displayOptimizationResults(data);
         } else {
-            showError(data.error);
+            showError(data.error || '策略优化失败');
         }
     } catch (error) {
-        showError('优化过程发生错误');
-        console.error(error);
+        showError('策略优化出错: ' + error.message);
     } finally {
         hideLoading();
     }
 }
 
-// 显示风险分析结果
-function displayRiskAnalysis(riskData) {
-    const riskContainer = document.getElementById('risk-analysis-container');
-    if (!riskContainer) return;
+function displayOptimizationResults(data) {
+    const resultsContainer = document.getElementById('optimization-results');
     
-    // 创建表格
-    let tableHTML = `
-        <div class="table-responsive mt-4">
-            <table class="table table-striped table-hover">
+    // 创建优化结果表格
+    let html = `
+        <h4 class="mb-4">优化结果对比</h4>
+        <div class="table-responsive">
+            <table class="table table-bordered">
                 <thead class="table-light">
                     <tr>
-                        <th>货币对组合</th>
-                        <th>相关系数</th>
-                        <th>组合波动率</th>
-                        <th>信号一致性</th>
-                        <th>风险得分</th>
-                        <th>风险等级</th>
-                        <th>交易建议</th>
+                        <th>指标</th>
+                        <th>原始策略</th>
+                        <th>优化策略</th>
+                        <th>提升</th>
                     </tr>
                 </thead>
                 <tbody>
-    `;
-    
-    // 添加数据行
-    riskData.forEach(item => {
-        // 根据风险等级设置不同的颜色
-        let riskClass = '';
-        if (item.风险等级.includes('极低')) {
-            riskClass = 'table-success';
-        } else if (item.风险等级.includes('低')) {
-            riskClass = 'table-info';
-        } else if (item.风险等级.includes('中')) {
-            riskClass = 'table-warning';
-        } else {
-            riskClass = 'table-danger';
-        }
-        
-        tableHTML += `
-            <tr class="${riskClass}">
-                <td>${item.货币对组合}</td>
-                <td>${parseFloat(item.相关系数).toFixed(4)}</td>
-                <td>${parseFloat(item.组合波动率).toFixed(4)}</td>
-                <td>${parseFloat(item.信号一致性).toFixed(4)}</td>
-                <td>${parseFloat(item.风险得分).toFixed(2)}</td>
-                <td>${item.风险等级}</td>
-                <td>${item.交易建议}</td>
-            </tr>
-        `;
-    });
-    
-    tableHTML += `
+                    <tr>
+                        <td>总收益率</td>
+                        <td>${(data.original.total_return * 100).toFixed(2)}%</td>
+                        <td>${(data.optimized.total_return * 100).toFixed(2)}%</td>
+                        <td class="${data.improvement.total_return > 0 ? 'text-success' : 'text-danger'}">
+                            ${(data.improvement.total_return * 100).toFixed(2)}%
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>夏普比率</td>
+                        <td>${data.original.sharpe_ratio.toFixed(2)}</td>
+                        <td>${data.optimized.sharpe_ratio.toFixed(2)}</td>
+                        <td class="${data.improvement.sharpe_ratio > 0 ? 'text-success' : 'text-danger'}">
+                            ${data.improvement.sharpe_ratio.toFixed(2)}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>最大回撤</td>
+                        <td>${(data.original.max_drawdown * 100).toFixed(2)}%</td>
+                        <td>${(data.optimized.max_drawdown * 100).toFixed(2)}%</td>
+                        <td class="${data.improvement.max_drawdown < 0 ? 'text-success' : 'text-danger'}">
+                            ${(data.improvement.max_drawdown * 100).toFixed(2)}%
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>胜率</td>
+                        <td>${(data.original.win_rate * 100).toFixed(2)}%</td>
+                        <td>${(data.optimized.win_rate * 100).toFixed(2)}%</td>
+                        <td class="${data.improvement.win_rate > 0 ? 'text-success' : 'text-danger'}">
+                            ${(data.improvement.win_rate * 100).toFixed(2)}%
+                        </td>
+                    </tr>
                 </tbody>
             </table>
         </div>
+        
+        <div class="row mt-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">优化参数</div>
+                    <div class="card-body">
+                        <ul class="list-group">
+                            ${Object.entries(data.optimized.parameters || {}).map(([key, value]) => 
+                                `<li class="list-group-item d-flex justify-content-between align-items-center">
+                                    ${key}
+                                    <span class="badge bg-primary rounded-pill">${value}</span>
+                                </li>`
+                            ).join('')}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">优化建议</div>
+                    <div class="card-body">
+                        <p>${data.optimized.recommendation || '根据优化结果，建议采用新的参数设置以提高策略性能。'}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
     `;
     
-    riskContainer.innerHTML = tableHTML;
+    resultsContainer.innerHTML = html;
 }
 
-// 显示优化结果
-function displayOptimizationResults(data) {
-    const optimizationPanel = document.querySelector('.optimization-panel');
-    let html = '<div class="optimization-results">';
+// 设置优化表单的默认日期
+function setupOptimizationForm() {
+    const startDateInput = document.getElementById('optimize-start-date');
+    const endDateInput = document.getElementById('optimize-end-date');
     
-    // 显示最优参数
-    html += `<div class="best-params">
-        <h4>最优参数组合</h4>
-        <div class="params-grid">
-            <div class="param-item">
-                <div class="param-label">短期均线</div>
-                <div class="param-value">${data.best_solution.parameters.ma_short}</div>
-            </div>
-            <div class="param-item">
-                <div class="param-label">长期均线</div>
-                <div class="param-value">${data.best_solution.parameters.ma_long}</div>
-            </div>
-            <div class="param-item">
-                <div class="param-label">RSI周期</div>
-                <div class="param-value">${data.best_solution.parameters.rsi_period}</div>
-            </div>
-            <div class="param-item">
-                <div class="param-label">止损比例</div>
-                <div class="param-value">${(data.best_solution.parameters.stop_loss * 100).toFixed(2)}%</div>
-            </div>
-        </div>
-    </div>`;
-
-    // 显示优化效果对比
-    html += `<div class="optimization-comparison mt-4">
-        <h4>优化效果对比</h4>
-        <div class="comparison-chart">
-            <canvas id="comparisonChart"></canvas>
-        </div>
-    </div>`;
-
-    optimizationPanel.innerHTML = html;
-
-    // 绘制对比图表
-    drawComparisonChart(data);
+    if (startDateInput && endDateInput) {
+        // 设置开始日期为 2015-01-28
+        startDateInput.value = '2015-01-28';
+        
+        // 设置结束日期为今天
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        endDateInput.value = `${year}-${month}-${day}`;
+        
+        // 初始化日期选择器
+        flatpickr(startDateInput, {
+            dateFormat: 'Y-m-d',
+            minDate: '2015-01-28',
+            maxDate: 'today'
+        });
+        
+        flatpickr(endDateInput, {
+            dateFormat: 'Y-m-d',
+            minDate: '2015-01-28',
+            maxDate: 'today'
+        });
+    }
 }
 
 // 客服功能
