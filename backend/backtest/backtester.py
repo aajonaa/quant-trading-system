@@ -64,6 +64,17 @@ class ForexBacktester:
             if df.empty:
                 raise Exception("选定日期范围内没有数据")
             
+            # 确保数据点足够密集，如果数据点太少，可以进行插值
+            if len(df) < 100:  # 如果数据点少于100个
+                # 创建完整的日期范围
+                date_range = pd.date_range(start=df['Date'].min(), end=df['Date'].max(), freq='D')
+                # 创建新的DataFrame
+                new_df = pd.DataFrame({'Date': date_range})
+                # 合并原始数据
+                df = pd.merge(new_df, df, on='Date', how='left')
+                # 填充缺失值
+                df = df.fillna(method='ffill').fillna(method='bfill')
+            
             # 初始化变量
             equity = [self.initial_capital]  # 从初始资金开始
             position = 0
@@ -82,6 +93,13 @@ class ForexBacktester:
             
             # 计算回测指标
             equity_curve = pd.Series(equity, index=df.index)
+            
+            # 确保返回足够多的数据点
+            equity_data = {}
+            for i, (date, value) in enumerate(zip(df['Date'], equity)):
+                # 每天都返回数据点
+                equity_data[str(date.date())] = float(value)
+            
             returns = pd.Series([(eq - equity[i-1])/equity[i-1] for i, eq in enumerate(equity[1:], 1)], index=df.index[1:])
             
             total_return = (equity[-1] / self.initial_capital - 1)
@@ -95,7 +113,7 @@ class ForexBacktester:
                 'sharpe_ratio': float(sharpe_ratio),
                 'max_drawdown': float(max_drawdown),
                 'win_rate': float(win_rate),
-                'equity_curve': {str(k): float(v) for k, v in equity_curve.items()}
+                'equity_curve': equity_data
             }
             
         except Exception as e:

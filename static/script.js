@@ -333,9 +333,9 @@ function displayBacktestResults(results) {
                 x: {
                     type: 'time',
                     time: {
-                        unit: 'week',
+                        unit: 'day',
                         displayFormats: {
-                            week: 'yyyy-MM-dd'
+                            day: 'yyyy-MM-dd'
                         },
                         tooltipFormat: 'yyyy-MM-dd'
                     },
@@ -344,9 +344,9 @@ function displayBacktestResults(results) {
                         drawOnChartArea: true
                     },
                     ticks: {
-                        source: 'auto',
+                        source: 'data',
                         autoSkip: true,
-                        maxTicksLimit: 20,
+                        maxTicksLimit: 30,
                         maxRotation: 45,
                         minRotation: 45
                     }
@@ -755,4 +755,63 @@ async function loadRiskAnalysis() {
     } finally {
         hideLoading();
     }
+}
+
+// 显示风险分析结果
+function displayRiskAnalysis(riskData) {
+    const riskContainer = document.getElementById('risk-analysis-container');
+    if (!riskContainer) return;
+    
+    // 创建表格
+    let tableHTML = `
+        <div class="table-responsive mt-4">
+            <table class="table table-striped table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>货币对组合</th>
+                        <th>相关系数</th>
+                        <th>组合波动率</th>
+                        <th>信号一致性</th>
+                        <th>风险得分</th>
+                        <th>风险等级</th>
+                        <th>交易建议</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    // 添加数据行
+    riskData.forEach(item => {
+        // 根据风险等级设置不同的颜色
+        let riskClass = '';
+        if (item.风险等级.includes('极低')) {
+            riskClass = 'table-success';
+        } else if (item.风险等级.includes('低')) {
+            riskClass = 'table-info';
+        } else if (item.风险等级.includes('中')) {
+            riskClass = 'table-warning';
+        } else {
+            riskClass = 'table-danger';
+        }
+        
+        tableHTML += `
+            <tr class="${riskClass}">
+                <td>${item.货币对组合}</td>
+                <td>${parseFloat(item.相关系数).toFixed(4)}</td>
+                <td>${parseFloat(item.组合波动率).toFixed(4)}</td>
+                <td>${parseFloat(item.信号一致性).toFixed(4)}</td>
+                <td>${parseFloat(item.风险得分).toFixed(2)}</td>
+                <td>${item.风险等级}</td>
+                <td>${item.交易建议}</td>
+            </tr>
+        `;
+    });
+    
+    tableHTML += `
+                </tbody>
+            </table>
+        </div>
+    `;
+    
+    riskContainer.innerHTML = tableHTML;
 }
