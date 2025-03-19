@@ -186,6 +186,47 @@ function setupEventListeners() {
             maxDate: 'today'
         });
     }
+
+    // 信号解释表单提交
+    document.getElementById('signalExplainForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        generateSignalExplanation();
+    });
+
+    // 设置信号解释日期范围
+    const signalStartDateInput = document.getElementById('signal-start-date');
+    const signalEndDateInput = document.getElementById('signal-end-date');
+    
+    if (signalStartDateInput && signalEndDateInput) {
+        // 设置默认日期范围（过去30天）
+        const today = new Date();
+        const thirtyDaysAgo = new Date(today);
+        thirtyDaysAgo.setDate(today.getDate() - 30);
+        
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        
+        const prevYear = thirtyDaysAgo.getFullYear();
+        const prevMonth = String(thirtyDaysAgo.getMonth() + 1).padStart(2, '0');
+        const prevDay = String(thirtyDaysAgo.getDate()).padStart(2, '0');
+        
+        signalStartDateInput.value = `${prevYear}-${prevMonth}-${prevDay}`;
+        signalEndDateInput.value = `${year}-${month}-${day}`;
+        
+        // 初始化日期选择器
+        flatpickr(signalStartDateInput, {
+            dateFormat: 'Y-m-d',
+            minDate: '2015-01-28',
+            maxDate: 'today'
+        });
+        
+        flatpickr(signalEndDateInput, {
+            dateFormat: 'Y-m-d',
+            minDate: '2015-01-28',
+            maxDate: 'today'
+        });
+    }
 }
 
 function addWelcomeMessage() {
@@ -814,4 +855,106 @@ function displayRiskAnalysis(riskData) {
     `;
     
     riskContainer.innerHTML = tableHTML;
+}
+
+// 生成信号解释
+async function generateSignalExplanation() {
+    try {
+        const currencyPair = document.getElementById('signal-currency-pair').value;
+        const startDate = document.getElementById('signal-start-date').value;
+        const endDate = document.getElementById('signal-end-date').value;
+        
+        // 验证日期范围
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        
+        if (start > end) {
+            showError('开始日期不能大于结束日期');
+            return;
+        }
+        
+        showLoading('正在生成信号解释...');
+        
+        const response = await fetch('/api/signal_explanation', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                currency_pair: currencyPair,
+                start_date: startDate,
+                end_date: endDate
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            displaySignalExplanation(currencyPair, data.explanation);
+        } else {
+            showError(data.error || '生成信号解释失败');
+        }
+    } catch (error) {
+        showError('生成信号解释出错: ' + error.message);
+    } finally {
+        hideLoading();
+    }
+}
+
+// 显示信号解释
+function displaySignalExplanation(currencyPair, explanation) {
+    const container = document.getElementById('signal-explanation-container');
+    
+    let html = `
+        <div class="signal-explanation">
+            <h4 class="mb-3">${currencyPair} 信号分析</h4>
+            
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">市场趋势概述</h5>
+                </div>
+                <div class="card-body">
+                    <p>${explanation.市场趋势概述 || '暂无趋势分析'}</p>
+                </div>
+            </div>
+            
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">信号解读</h5>
+                </div>
+                <div class="card-body">
+                    <p>${explanation.信号解读 || '暂无信号解读'}</p>
+                </div>
+            </div>
+            
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">技术面分析</h5>
+                </div>
+                <div class="card-body">
+                    <p>${explanation.技术面分析 || '暂无技术面分析'}</p>
+                </div>
+            </div>
+            
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">风险评估</h5>
+                </div>
+                <div class="card-body">
+                    <p>${explanation.风险评估 || '暂无风险评估'}</p>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">未来展望</h5>
+                </div>
+                <div class="card-body">
+                    <p>${explanation.未来展望 || '暂无未来展望'}</p>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    container.innerHTML = html;
 }

@@ -107,6 +107,49 @@
             </div>
         </section>
 
+        <!-- 信号解释模块 -->
+        <section id="signal-analysis" class="section">
+            <div class="container">
+                <div class="section-header">
+                    <h2>信号解释</h2>
+                    <p>货币对交易信号详细解释</p>
+                </div>
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="params-card">
+                            <form id="signalExplainForm">
+                                <div class="form-group">
+                                    <label>选择货币对</label>
+                                    <select class="form-control" id="signal-currency-pair">
+                                        <option value="CNYAUD">CNY/AUD</option>
+                                        <option value="CNYEUR">CNY/EUR</option>
+                                        <option value="CNYGBP">CNY/GBP</option>
+                                        <option value="CNYJPY">CNY/JPY</option>
+                                        <option value="CNYUSD">CNY/USD</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>分析区间</label>
+                                    <input type="text" class="form-control datepicker" id="signal-start-date">
+                                    <input type="text" class="form-control datepicker mt-2" id="signal-end-date">
+                                </div>
+                                <button type="submit" class="btn btn-primary btn-block">生成信号解释</button>
+                            </form>
+                        </div>
+                    </div>
+                    <div class="col-md-8">
+                        <div class="results-card">
+                            <div id="signal-explanation-container">
+                                <div class="text-center py-5">
+                                    <p>请选择货币对和日期范围，然后点击"生成信号解释"</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <!-- 风险控制模块 -->
         <section id="risk" class="section">
             <div class="container">

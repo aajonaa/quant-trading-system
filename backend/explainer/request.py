@@ -80,10 +80,14 @@ def prepare_analysis_data(currency_pair):
     # 提取最近的数据点进行分析（最多30行）
     recent_data = combined_df.tail(30)
     
+    # 转换日期格式为字符串
+    recent_data = recent_data.copy()
+    recent_data['Date'] = recent_data['Date'].dt.strftime('%Y-%m-%d')
+    
     # 计算一些基本统计信息
     stats = {
         "currency_pair": currency_pair,
-        "period": f"{recent_data['Date'].min().strftime('%Y-%m-%d')} 至 {recent_data['Date'].max().strftime('%Y-%m-%d')}",
+        "period": f"{recent_data['Date'].min()} 至 {recent_data['Date'].max()}",
         "avg_price": recent_data['Price'].mean() if 'Price' in recent_data.columns else None,
         "price_change": recent_data['Price'].pct_change().mean() * 100 if 'Price' in recent_data.columns else None,
         "signal_distribution": recent_data['Signal'].value_counts().to_dict() if 'Signal' in recent_data.columns else None,
@@ -174,6 +178,109 @@ def generate_signal_explanation(currency_pair):
 def get_signal_explanation(currency_pair):
     """获取货币对信号的专业解释（对外接口）"""
     return generate_signal_explanation(currency_pair)
+
+def get_signal_explanation_with_period(currency_pair, start_date, end_date):
+    """获取特定时间区间内的货币对信号解释"""
+    try:
+        signals_df, processed_df = load_signal_data(currency_pair)
+        if signals_df is None:
+            return {"success": False, "error": f"无法获取 {currency_pair} 的数据"}
+            
+        # 转换日期格式
+        signals_df['Date'] = pd.to_datetime(signals_df['Date'])
+        
+        # 过滤时间区间
+        start_date = pd.to_datetime(start_date)
+        end_date = pd.to_datetime(end_date)
+        
+        filtered_df = signals_df[(signals_df['Date'] >= start_date) & (signals_df['Date'] <= end_date)]
+        
+        if filtered_df.empty:
+            return {"success": False, "error": f"所选时间区间内没有 {currency_pair} 的信号数据"}
+        
+        # 准备分析数据
+        filtered_df = filtered_df.copy()
+        filtered_df['Date'] = filtered_df['Date'].dt.strftime('%Y-%m-%d')
+        
+        # 计算基本统计信息
+        signal_distribution = filtered_df['Signal'].value_counts().to_dict()
+        buy_signals = signal_distribution.get(1, 0)
+        sell_signals = signal_distribution.get(-1, 0)
+        hold_signals = signal_distribution.get(0, 0)
+        total_signals = len(filtered_df)
+        
+        # 计算价格变化
+        if 'Price' in filtered_df.columns and len(filtered_df) > 1:
+            price_change = (filtered_df['Price'].iloc[-1] / filtered_df['Price'].iloc[0] - 1) * 100
+        else:
+            price_change = 0
+            
+        # 构建提示词
+        prompt = f"""
+        请分析以下货币对 {currency_pair} 在 {start_date.strftime('%Y-%m-%d')} 至 {end_date.strftime('%Y-%m-%d')} 期间的信号数据，并提供专业的市场分析解释。
+
+        数据概览:
+        - 货币对: {currency_pair}
+        - 分析周期: {start_date.strftime('%Y-%m-%d')} 至 {end_date.strftime('%Y-%m-%d')}
+        - 总信号数: {total_signals}
+        - 买入信号数: {buy_signals}
+        - 卖出信号数: {sell_signals}
+        - 持有信号数: {hold_signals}
+        - 期间价格变化: {price_change:.2f}%
+        
+        信号数据样本:
+        {filtered_df[['Date', 'Signal', 'Price']].head(10).to_string(index=False)}
+        ...
+        {filtered_df[['Date', 'Signal', 'Price']].tail(10).to_string(index=False)}
+        
+        请提供以下内容的专业分析:
+        1. 市场趋势概述：基于所选期间的价格走势和信号分布分析市场趋势
+        2. 信号解读：解释这些交易信号的含义及其背后的逻辑
+        3. 技术面分析：分析信号与价格变动的关系和可能的技术指标含义
+        4. 风险评估：评估期间内市场的风险水平和波动特征
+        5. 未来展望：基于历史信号推测未来可能的市场走势
+        
+        请以专业分析师的口吻撰写，注重对信号背后逻辑的解释，避免直接提供交易建议。内容要详实、专业且有深度。
+        """
+        
+        # 调用 DeepSeek API
+        try:
+            payload = {
+                "model": "deepseek-chat",
+                "temperature": 0.3,
+                "max_tokens": 2000,
+                "response_format": {"type": "json_object"},
+                "messages": [
+                    {"role": "system", "content": "你是一位专业的外汇市场分析师，擅长解读交易信号和市场趋势，提供专业的市场分析和解释。请确保响应为JSON格式，包含市场趋势概述、信号解读、技术面分析、风险评估和未来展望这几个字段。"},
+                    {"role": "user", "content": prompt}
+                ]
+            }
+            
+            response = requests.post(api_url, headers=headers, json=payload)
+            
+            if response.status_code == 200:
+                result = response.json()
+                if "choices" in result and len(result["choices"]) > 0:
+                    explanation = json.loads(result["choices"][0]["message"]["content"])
+                    return {
+                        "success": True,
+                        "currency_pair": currency_pair,
+                        "explanation": explanation
+                    }
+                else:
+                    logger.error(f"API响应格式错误: {result}")
+                    return {"success": False, "error": "API响应格式错误"}
+            else:
+                logger.error(f"API请求失败: {response.status_code} - {response.text}")
+                return {"success": False, "error": f"API请求失败: {response.status_code}"}
+                
+        except Exception as e:
+            logger.error(f"生成解释时出错: {str(e)}")
+            return {"success": False, "error": str(e)}
+            
+    except Exception as e:
+        logger.error(f"处理数据时出错: {str(e)}")
+        return {"success": False, "error": str(e)}
 
 # 测试函数
 def main():

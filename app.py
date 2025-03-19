@@ -235,5 +235,37 @@ def risk_analysis():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
+@app.route('/api/signal_explanation', methods=['POST'])
+def signal_explanation():
+    try:
+        data = request.get_json()
+        currency_pair = data.get('currency_pair')
+        start_date = data.get('start_date')
+        end_date = data.get('end_date')
+        
+        if not all([currency_pair, start_date, end_date]):
+            return jsonify({'success': False, 'error': '请提供所有必要参数'})
+        
+        # 导入信号解释模块
+        from backend.explainer.request import get_signal_explanation_with_period
+        
+        # 获取信号解释
+        result = get_signal_explanation_with_period(
+            currency_pair=currency_pair,
+            start_date=start_date,
+            end_date=end_date
+        )
+        
+        if result.get('success'):
+            return jsonify({
+                'success': True,
+                'explanation': result['explanation']
+            })
+        else:
+            return jsonify({'success': False, 'error': result.get('error', '生成信号解释失败')})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
 if __name__ == '__main__':
     app.run(debug=True)

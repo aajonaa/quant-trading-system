@@ -423,3 +423,36 @@ body {
     z-index: 999;
     position: relative;
 }
+
+/* 信号解释样式 */
+.signal-explanation {
+    padding: 1.5rem 0;
+}
+
+.signal-explanation .card {
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    border: none;
+}
+
+.signal-explanation .card-header {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid rgba(0,0,0,0.05);
+    padding: 1rem 1.5rem;
+}
+
+.signal-explanation .card-header h5 {
+    margin: 0;
+    color: var(--primary-color);
+    font-weight: 500;
+}
+
+.signal-explanation .card-body {
+    padding: 1.5rem;
+    color: #333;
+    line-height: 1.6;
+}
+
+.signal-explanation .card-body p {
+    margin-bottom: 0;
+}
