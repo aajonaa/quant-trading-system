@@ -112,8 +112,10 @@ body {
 /* 图表容器样式 */
 .chart-container {
     position: relative;
-    height: 300px;
-    margin-top: 1.5rem;
+    height: auto;
+    min-height: 300px;
+    margin: 1rem 0;
+    width: 100%;
 }
 
 /* 指标展示样式 */
@@ -121,14 +123,18 @@ body {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 1rem;
-    margin-bottom: 2rem;
+    margin-bottom: 1.5rem;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    padding: 1rem;
 }
 
 .metric-card {
-    background: #f8f9fa;
-    padding: 1rem;
+    background: white;
     border-radius: 6px;
+    padding: 1rem;
     text-align: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
 }
 
 .metric-label {
@@ -455,4 +461,67 @@ body {
 
 .signal-explanation .card-body p {
     margin-bottom: 0;
+}
+
+/* 更新结果卡片样式 */
+.results-card {
+    background: #fff;
+    border-radius: 8px;
+    padding: 1.5rem;
+    box-shadow: var(--card-shadow);
+    height: auto;
+    min-height: 400px;
+    margin-bottom: 2rem;
+    display: flex;
+    flex-direction: column;
+}
+
+/* 为首页添加特性卡片样式 */
+.feature-card {
+    height: 100%;
+    transition: transform 0.3s, box-shadow 0.3s;
+    border: none;
+    box-shadow: var(--card-shadow);
+}
+
+.feature-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+}
+
+.feature-card .card-body {
+    padding: 2rem 1.5rem;
+}
+
+.feature-card .fa-3x {
+    color: var(--primary-color);
+}
+
+.feature-cards {
+    margin-bottom: 3rem;
+}
+
+/* 为指标行添加响应式调整 */
+@media (max-width: 768px) {
+    .metrics-row {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 576px) {
+    .metrics-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* 调整图表的响应式行为 */
+@media (min-width: 1200px) {
+    .chart-container {
+        height: 400px;
+    }
+}
+
+/* 添加信号解释容器样式 */
+#signal-explanation-container {
+    min-height: 300px;
 }

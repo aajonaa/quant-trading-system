@@ -37,6 +37,21 @@ users_db = {
 def index():
     return render_template('index.html')
 
+@app.route('/backtest')
+def backtest_page():
+    return render_template('backtest.html')
+
+@app.route('/signal')
+def signal_page():
+    return render_template('signal.html')
+
+@app.route('/risk')
+def risk_page():
+    return render_template('risk.html')
+
+@app.route('/optimize')
+def optimize_page():
+    return render_template('optimize.html')
 
 @app.route('/api/optimize_strategy', methods=['POST'])
 def optimize_strategy():
@@ -245,6 +260,46 @@ def signal_explanation():
         
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/risk_analysis', methods=['GET'])
+def risk_analysis():
+    try:
+        # 读取风险分析数据
+        risk_file = Path(__file__).parent / 'backend' / 'mulsignals' / 'currency_pair_risks.csv'
+        
+        # 如果文件不存在，返回错误
+        if not risk_file.exists():
+            return jsonify({
+                'success': False, 
+                'error': '风险数据文件不存在'
+            })
+        
+        # 读取CSV文件
+        risk_data = pd.read_csv(risk_file)
+        
+        # 转换为JSON格式
+        risk_json = risk_data.to_dict(orient='records')
+        
+        return jsonify({
+            'success': True,
+            'data': risk_json
+        })
+        
+    except Exception as e:
+        logger.error(f"风险分析API错误: {str(e)}")
+        return jsonify({
+            'success': False, 
+            'error': f'处理风险数据时出错: {str(e)}'
+        })
+
+@app.route('/static/data/<path:filename>')
+def static_data(filename):
+    # 安全检查，确保只能访问特定文件
+    if filename == 'currency_pair_risks.csv':
+        risk_file = Path(__file__).parent / 'backend' / 'mulsignals' / filename
+        if risk_file.exists():
+            return open(risk_file, 'r').read(), 200, {'Content-Type': 'text/csv'}
+    return "文件不存在", 404
 
 if __name__ == '__main__':
     app.run(debug=True)

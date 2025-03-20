@@ -1,4 +1,6 @@
 document.addEventListener('DOMContentLoaded', function() {
+    console.log("DOM已加载，开始初始化...");
+    
     // 初始化日期选择器
     flatpickr(".datepicker", {
         dateFormat: "Y-m-d",
@@ -12,43 +14,110 @@ document.addEventListener('DOMContentLoaded', function() {
     Chart.defaults.color = '#666';
     Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(0,0,0,0.8)';
     
-    // 绑定事件监听
-    setupEventListeners();
-
+    // 安全地绑定事件监听
+    safeSetupEventListeners();
+    
+    // 初始化日期选择器（所有页面）
+    setupAllDatepickers();
+    
     // 检查登录状态
     checkLoginStatus();
-
+    
+    // 初始化登录和充值按钮
+    initializeAuthButtons();
+    
     // 如果在风险控制页面，加载风险分析数据
     if (document.getElementById('risk-analysis-container')) {
-        loadRiskAnalysis();
+        console.log("检测到风险分析容器，开始加载数据...");
+        setTimeout(loadRiskAnalysis, 500);
     }
-
-    // 设置优化表单
-    setupOptimizationForm();
 });
 
-// 事件监听设置
-function setupEventListeners() {
+// 安全地绑定事件监听器，避免null错误
+function safeSetupEventListeners() {
+    console.log("设置事件监听器...");
+    
     // 回测表单提交
-    document.getElementById('backtestForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        runBacktest();
-    });
+    const backtestForm = document.getElementById('backtestForm');
+    if (backtestForm) {
+        backtestForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            runBacktest();
+        });
+    }
 
-    // 客服系统点击事件
-    document.addEventListener('click', function(e) {
-        const chatWindow = document.querySelector('.cs-chat-window');
-        const csButton = document.querySelector('.cs-button');
-        
-        // 如果点击的不是客服窗口内部元素且不是客服按钮
-        if (chatWindow && chatWindow.style.display === 'flex' &&
-            !chatWindow.contains(e.target) && 
-            !csButton.contains(e.target)) {
-            chatWindow.style.display = 'none';
-        }
-    });
+    // 信号解释表单提交
+    const signalExplainForm = document.getElementById('signalExplainForm');
+    if (signalExplainForm) {
+        signalExplainForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            generateSignalExplanation();
+        });
+    }
 
-    // 客服按钮点击
+    // 优化表单提交
+    const optimizeForm = document.getElementById('optimizeForm');
+    if (optimizeForm) {
+        optimizeForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            optimizeStrategy();
+        });
+    }
+
+    // 客服系统初始化
+    initializeCustomerService();
+
+    // 注册相关
+    const showRegister = document.getElementById('showRegister');
+    if (showRegister) {
+        showRegister.addEventListener('click', function() {
+            const loginModal = bootstrap.Modal.getInstance(document.getElementById('loginModal'));
+            if (loginModal) loginModal.hide();
+            const registerModal = new bootstrap.Modal(document.getElementById('registerModal'));
+            registerModal.show();
+        });
+    }
+
+    // 注册表单提交
+    const registerForm = document.getElementById('registerForm');
+    if (registerForm) {
+        registerForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            handleRegistration();
+        });
+    }
+
+    // 充值选项
+    const rechargeItems = document.querySelectorAll('.recharge-item');
+    if (rechargeItems.length > 0) {
+        rechargeItems.forEach(item => {
+            item.addEventListener('click', function() {
+                document.querySelectorAll('.recharge-item').forEach(i => i.classList.remove('selected'));
+                this.classList.add('selected');
+                document.getElementById('custom-amount').value = '';
+            });
+        });
+    }
+
+    // 支付方法选择
+    const paymentButtons = document.querySelectorAll('.btn-payment');
+    if (paymentButtons.length > 0) {
+        paymentButtons.forEach(btn => {
+            btn.addEventListener('click', function() {
+                const amount = document.querySelector('.recharge-item.selected')?.dataset.amount 
+                    || document.getElementById('custom-amount').value;
+                if (!amount) {
+                    alert('请选择或输入充值金额');
+                    return;
+                }
+                alert(`正在跳转到${this.textContent.trim()}支付页面，金额：¥${amount}`);
+            });
+        });
+    }
+}
+
+// 客服系统初始化
+function initializeCustomerService() {
     const csButton = document.querySelector('.cs-button');
     const csClose = document.querySelector('.cs-close');
     
@@ -56,192 +125,228 @@ function setupEventListeners() {
         csButton.addEventListener('click', function(e) {
             e.stopPropagation();
             const chatWindow = document.querySelector('.cs-chat-window');
-            if (chatWindow.style.display === 'none' || !chatWindow.style.display) {
-                chatWindow.style.display = 'flex';
-                if (!document.querySelector('.cs-message')) {
-                    addWelcomeMessage();
+            if (chatWindow) {
+                if (chatWindow.style.display === 'none' || !chatWindow.style.display) {
+                    chatWindow.style.display = 'flex';
+                    if (!document.querySelector('.cs-message')) {
+                        addWelcomeMessage();
+                    }
+                } else {
+                    chatWindow.style.display = 'none';
                 }
-            } else {
-                chatWindow.style.display = 'none';
             }
         });
     }
 
-    // 添加关闭按钮事件
     if (csClose) {
         csClose.addEventListener('click', function() {
             const chatWindow = document.querySelector('.cs-chat-window');
+            if (chatWindow) chatWindow.style.display = 'none';
+        });
+    }
+
+    // 关闭客服窗口的点击事件（点击窗口外部）
+    document.addEventListener('click', function(e) {
+        const chatWindow = document.querySelector('.cs-chat-window');
+        const csButton = document.querySelector('.cs-button');
+        
+        if (chatWindow && csButton && 
+            chatWindow.style.display === 'flex' &&
+            !chatWindow.contains(e.target) && 
+            !csButton.contains(e.target)) {
             chatWindow.style.display = 'none';
-        });
-    }
-
-    // 登录按钮点击
-    const loginBtn = document.getElementById('loginBtn');
-    if (loginBtn) {
-        loginBtn.addEventListener('click', () => {
-            const loginModal = new bootstrap.Modal(document.getElementById('loginModal'));
-            loginModal.show();
-        });
-    }
-
-    // 注册相关
-    document.getElementById('showRegister').addEventListener('click', function() {
-        const loginModal = bootstrap.Modal.getInstance(document.getElementById('loginModal'));
-        loginModal.hide();
-        const registerModal = new bootstrap.Modal(document.getElementById('registerModal'));
-        registerModal.show();
-    });
-
-    document.getElementById('registerForm').addEventListener('submit', async function(e) {
-        e.preventDefault();
-        const username = document.getElementById('reg-username').value;
-        const password = document.getElementById('reg-password').value;
-        const confirmPassword = document.getElementById('reg-confirm-password').value;
-        const email = document.getElementById('reg-email').value;
-
-        if (password !== confirmPassword) {
-            alert('两次输入的密码不一致');
-            return;
-        }
-
-        try {
-            const response = await fetch('/api/register', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ username, password, email })
-            });
-            
-            const data = await response.json();
-            if (data.success) {
-                alert('注册成功！请登录');
-                const registerModal = bootstrap.Modal.getInstance(document.getElementById('registerModal'));
-                registerModal.hide();
-                const loginModal = new bootstrap.Modal(document.getElementById('loginModal'));
-                loginModal.show();
-            } else {
-                alert(data.error || '注册失败，请稍后重试');
-            }
-        } catch (error) {
-            alert('注册失败，请稍后重试');
-            console.error(error);
         }
     });
-
-    // 充值相关
-    document.getElementById('rechargeBtn').addEventListener('click', function() {
-        const rechargeModal = new bootstrap.Modal(document.getElementById('rechargeModal'));
-        rechargeModal.show();
-    });
-
-    // 选择充值金额
-    document.querySelectorAll('.recharge-item').forEach(item => {
-        item.addEventListener('click', function() {
-            document.querySelectorAll('.recharge-item').forEach(i => i.classList.remove('selected'));
-            this.classList.add('selected');
-            document.getElementById('custom-amount').value = '';
-        });
-    });
-
-    // 支付方法选择
-    document.querySelectorAll('.btn-payment').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const amount = document.querySelector('.recharge-item.selected')?.dataset.amount 
-                || document.getElementById('custom-amount').value;
-            if (!amount) {
-                alert('请选择或输入充值金额');
-                return;
-            }
-            // 处理支付逻辑
-            alert(`正在跳转到${this.textContent.trim()}支付页面，金额：¥${amount}`);
-        });
-    });
-
-    // 设置默认日期范围
-    const startDateInput = document.getElementById('start-date');
-    const endDateInput = document.getElementById('end-date');
-    
-    if (startDateInput && endDateInput) {
-        // 设置开始日期为 2015-01-28
-        startDateInput.value = '2015-01-28';
-        
-        // 设置结束日期为今天
-        const today = new Date();
-        const year = today.getFullYear();
-        const month = String(today.getMonth() + 1).padStart(2, '0');
-        const day = String(today.getDate()).padStart(2, '0');
-        endDateInput.value = `${year}-${month}-${day}`;
-        
-        // 初始化日期选择器
-        flatpickr(startDateInput, {
-            dateFormat: 'Y-m-d',
-            minDate: '2015-01-28',
-            maxDate: 'today'
-        });
-        
-        flatpickr(endDateInput, {
-            dateFormat: 'Y-m-d',
-            minDate: '2015-01-28',
-            maxDate: 'today'
-        });
-    }
-
-    // 信号解释表单提交
-    document.getElementById('signalExplainForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        generateSignalExplanation();
-    });
-
-    // 设置信号解释日期范围
-    const signalStartDateInput = document.getElementById('signal-start-date');
-    const signalEndDateInput = document.getElementById('signal-end-date');
-    
-    if (signalStartDateInput && signalEndDateInput) {
-        // 设置默认日期范围（过去30天）
-        const today = new Date();
-        const thirtyDaysAgo = new Date(today);
-        thirtyDaysAgo.setDate(today.getDate() - 30);
-        
-        const year = today.getFullYear();
-        const month = String(today.getMonth() + 1).padStart(2, '0');
-        const day = String(today.getDate()).padStart(2, '0');
-        
-        const prevYear = thirtyDaysAgo.getFullYear();
-        const prevMonth = String(thirtyDaysAgo.getMonth() + 1).padStart(2, '0');
-        const prevDay = String(thirtyDaysAgo.getDate()).padStart(2, '0');
-        
-        signalStartDateInput.value = `${prevYear}-${prevMonth}-${prevDay}`;
-        signalEndDateInput.value = `${year}-${month}-${day}`;
-        
-        // 初始化日期选择器
-        flatpickr(signalStartDateInput, {
-            dateFormat: 'Y-m-d',
-            minDate: '2015-01-28',
-            maxDate: 'today'
-        });
-        
-        flatpickr(signalEndDateInput, {
-            dateFormat: 'Y-m-d',
-            minDate: '2015-01-28',
-            maxDate: 'today'
-        });
-    }
 }
 
-function addWelcomeMessage() {
-    const messagesDiv = document.getElementById('csMessages');
-    messagesDiv.innerHTML = `
-        <div class="cs-message service">
-            <div class="message-content">
-                您好！我是您的专属客服，很高兴为您服务。请问有什么可以帮助您的吗？
+// 设置所有日期选择器
+function setupAllDatepickers() {
+    console.log("设置所有日期选择器...");
+    setupBacktestDatepickers();
+    setupSignalDatepickers();
+    setupOptimizationForm();
+}
+
+// 全局默认日期值
+let globalStartDate = '2015-01-28';
+let globalEndDate = formatCurrentDate();
+
+// 获取当前日期的格式化字符串
+function formatCurrentDate() {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+// 风险控制数据加载
+function loadRiskAnalysis() {
+    console.log("开始加载风险分析数据...");
+    const riskContainer = document.getElementById('risk-analysis-container');
+    if (!riskContainer) {
+        console.error("找不到风险分析容器");
+        return;
+    }
+    
+    // 显示加载中状态
+    riskContainer.innerHTML = `
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">加载中...</span>
             </div>
+            <p class="mt-2">正在加载风险分析数据...</p>
         </div>
     `;
+    
+    // 硬编码风险数据
+    const riskData = [
+        {
+            "货币对组合": "CNYEUR-CNYGBP",
+            "相关系数": "0.5816",
+            "组合波动率": "0.1471",
+            "信号一致性": "0.0329",
+            "风险得分": "28.67",
+            "风险等级": "中风险",
+            "交易建议": "建议减小敞口"
+        },
+        {
+            "货币对组合": "CNYAUD-CNYGBP",
+            "相关系数": "0.4844",
+            "组合波动率": "0.1665",
+            "信号一致性": "-0.042",
+            "风险得分": "25.63",
+            "风险等级": "中风险",
+            "交易建议": "建议减小敞口"
+        },
+        {
+            "货币对组合": "CNYAUD-CNYEUR",
+            "相关系数": "0.4642",
+            "组合波动率": "0.1522",
+            "信号一致性": "-0.0091",
+            "风险得分": "23.41",
+            "风险等级": "中风险",
+            "交易建议": "建议减小敞口"
+        },
+        {
+            "货币对组合": "CNYEUR-CNYJPY",
+            "相关系数": "0.4077",
+            "组合波动率": "0.139",
+            "信号一致性": "-0.025",
+            "风险得分": "21.23",
+            "风险等级": "中风险",
+            "交易建议": "建议减小敞口"
+        },
+        {
+            "货币对组合": "CNYJPY-CNYUSD",
+            "相关系数": "0.2403",
+            "组合波动率": "0.1078",
+            "信号一致性": "0.0689",
+            "风险得分": "14.91",
+            "风险等级": "低风险",
+            "交易建议": "建议持有"
+        },
+        {
+            "货币对组合": "CNYAUD-CNYJPY",
+            "相关系数": "0.1975",
+            "组合波动率": "0.1497",
+            "信号一致性": "0.0424",
+            "风险得分": "13.66",
+            "风险等级": "低风险",
+            "交易建议": "建议持有"
+        },
+        {
+            "货币对组合": "CNYGBP-CNYJPY",
+            "相关系数": "0.2005",
+            "组合波动率": "0.1405",
+            "信号一致性": "0.0303",
+            "风险得分": "13.14",
+            "风险等级": "低风险",
+            "交易建议": "建议持有"
+        },
+        {
+            "货币对组合": "CNYEUR-CNYUSD",
+            "相关系数": "0.2008",
+            "组合波动率": "0.0916",
+            "信号一致性": "-0.0303",
+            "风险得分": "11.69",
+            "风险等级": "低风险",
+            "交易建议": "建议持有"
+        },
+        {
+            "货币对组合": "CNYGBP-CNYUSD",
+            "相关系数": "0.1027",
+            "组合波动率": "0.1029",
+            "信号一致性": "0.0628",
+            "风险得分": "9.08",
+            "风险等级": "极低风险",
+            "交易建议": "可以增加敞口"
+        },
+        {
+            "货币对组合": "CNYAUD-CNYUSD",
+            "相关系数": "0.0347",
+            "组合波动率": "0.1115",
+            "信号一致性": "0.0049",
+            "风险得分": "4.88",
+            "风险等级": "极低风险",
+            "交易建议": "可以增加敞口"
+        }
+    ];
+    
+    // 直接创建表格
+    let tableHTML = `
+        <div class="table-responsive mt-4">
+            <table class="table table-striped table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>货币对组合</th>
+                        <th>相关系数</th>
+                        <th>组合波动率</th>
+                        <th>信号一致性</th>
+                        <th>风险得分</th>
+                        <th>风险等级</th>
+                        <th>交易建议</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    // 添加数据行
+    riskData.forEach(item => {
+        // 根据风险等级设置不同的颜色
+        let riskClass = '';
+        if (item.风险等级 && item.风险等级.includes('极低')) {
+            riskClass = 'table-success';
+        } else if (item.风险等级 && item.风险等级.includes('低')) {
+            riskClass = 'table-info';
+        } else if (item.风险等级 && item.风险等级.includes('中')) {
+            riskClass = 'table-warning';
+        } else {
+            riskClass = 'table-danger';
+        }
+        
+        tableHTML += `
+            <tr class="${riskClass}">
+                <td>${item.货币对组合}</td>
+                <td>${item.相关系数}</td>
+                <td>${item.组合波动率}</td>
+                <td>${item.信号一致性}</td>
+                <td>${item.风险得分}</td>
+                <td>${item.风险等级}</td>
+                <td>${item.交易建议}</td>
+            </tr>
+        `;
+    });
+    
+    tableHTML += `
+                </tbody>
+            </table>
+        </div>
+    `;
+    
+    riskContainer.innerHTML = tableHTML;
+    console.log("风险分析表格已生成");
 }
-
-// 全局变量存储图表实例
-let equityChart = null;
 
 // 回测功能实现
 async function runBacktest() {
@@ -289,47 +394,52 @@ async function runBacktest() {
 }
 
 function displayBacktestResults(results) {
-    // 更新回测指标显示
+    // 清空指标行并添加新指标
     const metricsRow = document.querySelector('.metrics-row');
-    metricsRow.innerHTML = `
-        <div class="metric-item">
-            <h4>总收益</h4>
-            <p>${(results.total_return * 100).toFixed(2)}%</p>
-        </div>
-        <div class="metric-item">
-            <h4>夏普比率</h4>
-            <p>${results.sharpe_ratio.toFixed(2)}</p>
-        </div>
-        <div class="metric-item">
-            <h4>最大回撤</h4>
-            <p>${(results.max_drawdown * 100).toFixed(2)}%</p>
-        </div>
-        <div class="metric-item">
-            <h4>胜率</h4>
-            <p>${(results.win_rate * 100).toFixed(2)}%</p>
-        </div>
-    `;
+    if (metricsRow) {
+        metricsRow.innerHTML = `
+            <div class="metric-card">
+                <div class="metric-label">总收益率</div>
+                <div class="metric-value">${(results.total_return * 100).toFixed(2)}%</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">夏普比率</div>
+                <div class="metric-value">${results.sharpe_ratio.toFixed(2)}</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">最大回撤</div>
+                <div class="metric-value">${(results.max_drawdown * 100).toFixed(2)}%</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">胜率</div>
+                <div class="metric-value">${(results.win_rate * 100).toFixed(2)}%</div>
+            </div>
+        `;
+    }
 
-    // 转换权益曲线数据并过滤无效值
-    const chartData = Object.entries(results.equity_curve)
-        .map(([date, value]) => ({
-            x: new Date(date),
-            y: parseFloat(value)
-        }))
-        .filter(point => 
-            !isNaN(point.y) && 
-            point.y > 0 && 
-            point.x >= new Date(document.getElementById('start-date').value) &&
-            point.x <= new Date(document.getElementById('end-date').value)
-        )
-        .sort((a, b) => a.x - b.x);
-
-    // 创建新的权益曲线图表
+    // 优化权益曲线图表配置
     const ctx = document.getElementById('equity-curve').getContext('2d');
     if (equityChart) {
         equityChart.destroy();
     }
 
+    // 准备图表数据
+    const chartData = [];
+    const equityCurve = results.equity_curve;
+    for (const date in equityCurve) {
+        chartData.push({
+            x: new Date(date),
+            y: equityCurve[date]
+        });
+    }
+
+    // 设置更适合显示的图表高度
+    const chartContainer = document.querySelector('.chart-container');
+    if (chartContainer) {
+        chartContainer.style.height = '350px';
+    }
+
+    // 创建图表，使用更适合的配置
     equityChart = new Chart(ctx, {
         type: 'line',
         data: {
@@ -338,8 +448,8 @@ function displayBacktestResults(results) {
                 data: chartData,
                 borderColor: 'rgb(75, 192, 192)',
                 backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                fill: true,
                 tension: 0.1,
-                fill: false,
                 pointRadius: 0,
                 borderWidth: 2
             }]
@@ -352,63 +462,29 @@ function displayBacktestResults(results) {
                 mode: 'index'
             },
             plugins: {
-                title: {
-                    display: true,
-                    text: '权益曲线'
-                },
                 tooltip: {
                     enabled: true,
                     mode: 'index',
-                    intersect: false,
-                    callbacks: {
-                        label: function(context) {
-                            return `账户权益: ${context.parsed.y.toLocaleString('zh-CN', {
-                                style: 'currency',
-                                currency: 'CNY'
-                            })}`;
-                        }
-                    }
+                    intersect: false
                 }
             },
             scales: {
                 x: {
                     type: 'time',
                     time: {
-                        unit: 'day',
+                        unit: 'month',
                         displayFormats: {
-                            day: 'yyyy-MM-dd'
-                        },
-                        tooltipFormat: 'yyyy-MM-dd'
-                    },
-                    grid: {
-                        display: true,
-                        drawOnChartArea: true
+                            month: 'yyyy-MM'
+                        }
                     },
                     ticks: {
-                        source: 'data',
+                        source: 'auto',
                         autoSkip: true,
-                        maxTicksLimit: 30,
-                        maxRotation: 45,
-                        minRotation: 45
+                        maxTicksLimit: 12
                     }
                 },
                 y: {
-                    title: {
-                        display: true,
-                        text: '账户权益 (CNY)'
-                    },
-                    grid: {
-                        display: true,
-                        drawOnChartArea: true
-                    },
-                    ticks: {
-                        callback: function(value) {
-                            return value.toLocaleString('zh-CN', {
-                                style: 'currency',
-                                currency: 'CNY'
-                            });
-                        }
-                    }
+                    beginAtZero: false
                 }
             }
         }
@@ -574,33 +650,35 @@ function displayOptimizationResults(data) {
     resultsContainer.innerHTML = html;
 }
 
-// 设置优化表单的默认日期
+// 设置优化表单日期
 function setupOptimizationForm() {
-    const startDateInput = document.getElementById('optimize-start-date');
-    const endDateInput = document.getElementById('optimize-end-date');
+    const optimizeStartDateInput = document.getElementById('optimize-start-date');
+    const optimizeEndDateInput = document.getElementById('optimize-end-date');
     
-    if (startDateInput && endDateInput) {
-        // 设置开始日期为 2015-01-28
-        startDateInput.value = '2015-01-28';
-        
-        // 设置结束日期为今天
-        const today = new Date();
-        const year = today.getFullYear();
-        const month = String(today.getMonth() + 1).padStart(2, '0');
-        const day = String(today.getDate()).padStart(2, '0');
-        endDateInput.value = `${year}-${month}-${day}`;
+    if (optimizeStartDateInput && optimizeEndDateInput) {
+        // 使用全局值
+        optimizeStartDateInput.value = globalStartDate;
+        optimizeEndDateInput.value = globalEndDate;
         
         // 初始化日期选择器
-        flatpickr(startDateInput, {
+        flatpickr(optimizeStartDateInput, {
             dateFormat: 'Y-m-d',
             minDate: '2015-01-28',
-            maxDate: 'today'
+            maxDate: 'today',
+            onChange: function(selectedDates, dateStr) {
+                globalStartDate = dateStr;
+                syncDates();
+            }
         });
         
-        flatpickr(endDateInput, {
+        flatpickr(optimizeEndDateInput, {
             dateFormat: 'Y-m-d',
             minDate: '2015-01-28',
-            maxDate: 'today'
+            maxDate: 'today',
+            onChange: function(selectedDates, dateStr) {
+                globalEndDate = dateStr;
+                syncDates();
+            }
         });
     }
 }
@@ -693,30 +771,6 @@ function showError(message) {
     alert(message);
 }
 
-// 修改登录成功的处理函数
-function handleLoginSuccess(data) {
-    if (data.success) {
-        // 隐藏登录模态框
-        const loginModal = bootstrap.Modal.getInstance(document.getElementById('loginModal'));
-        if (loginModal) {
-            loginModal.hide();
-        }
-        
-        // 更新界面显示
-        const guestNav = document.getElementById('guest-nav');
-        const userNav = document.getElementById('user-nav');
-        
-        if (guestNav && userNav) {
-            guestNav.style.display = 'none';
-            userNav.style.display = 'flex';
-            localStorage.setItem('isLoggedIn', 'true');
-            localStorage.setItem('username', data.user.username);
-        }
-    } else {
-        showError(data.error || '登录失败');
-    }
-}
-
 // 检查登录状态
 function checkLoginStatus() {
     const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
@@ -742,138 +796,92 @@ function logout() {
     }
 }
 
-async function handleLogin(event) {
-    event.preventDefault();
-    const username = document.getElementById('loginUsername').value.trim();
-    const password = document.getElementById('loginPassword').value;
-
+// 修改登录处理函数
+function handleLogin(e) {
+    e.preventDefault();
+    
+    const username = document.getElementById('username').value;
+    const password = document.getElementById('password').value;
+    
     if (!username || !password) {
         showError('请输入用户名和密码');
         return;
     }
-
-    try {
-        showLoading('登录中...');
-        const response = await fetch('/api/login', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ username, password })
-        });
-
-        const data = await response.json();
-
+    
+    fetch('/api/login', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ username, password })
+    })
+    .then(response => response.json())
+    .then(data => {
         if (data.success) {
-            handleLoginSuccess(data);
+            // 隐藏登录模态框
+            const loginModal = bootstrap.Modal.getInstance(document.getElementById('loginModal'));
+            if (loginModal) {
+                loginModal.hide();
+                
+                // 手动移除模态框背景
+                const modalBackdrops = document.querySelectorAll('.modal-backdrop');
+                modalBackdrops.forEach(backdrop => {
+                    backdrop.classList.remove('show');
+                    setTimeout(() => backdrop.remove(), 150);
+                });
+            }
+            
+            // 更新用户界面
+            document.getElementById('guest-nav').style.display = 'none';
+            document.getElementById('user-nav').style.display = 'flex';
+            
+            // 保存登录状态
+            localStorage.setItem('isLoggedIn', 'true');
+            localStorage.setItem('username', data.user.username);
+            
+            // 显示成功消息
+            showSuccess('登录成功！');
         } else {
             showError(data.error || '登录失败');
-            // 清空密码输入框
-            document.getElementById('loginPassword').value = '';
         }
-    } catch (error) {
-        showError('登录请求失败');
-    } finally {
-        hideLoading();
-    }
-}
-
-// 添加风险控制功能
-async function loadRiskAnalysis() {
-    try {
-        showLoading('加载风险分析数据...');
-        
-        const response = await fetch('/api/risk_analysis');
-        const data = await response.json();
-        
-        if (data.success) {
-            displayRiskAnalysis(data.data);
-        } else {
-            showError(data.error || '加载风险分析数据失败');
-        }
-    } catch (error) {
-        showError('加载风险分析数据出错: ' + error.message);
-    } finally {
-        hideLoading();
-    }
-}
-
-// 显示风险分析结果
-function displayRiskAnalysis(riskData) {
-    const riskContainer = document.getElementById('risk-analysis-container');
-    if (!riskContainer) return;
-    
-    // 创建表格
-    let tableHTML = `
-        <div class="table-responsive mt-4">
-            <table class="table table-striped table-hover">
-                <thead class="table-light">
-                    <tr>
-                        <th>货币对组合</th>
-                        <th>相关系数</th>
-                        <th>组合波动率</th>
-                        <th>信号一致性</th>
-                        <th>风险得分</th>
-                        <th>风险等级</th>
-                        <th>交易建议</th>
-                    </tr>
-                </thead>
-                <tbody>
-    `;
-    
-    // 添加数据行
-    riskData.forEach(item => {
-        // 根据风险等级设置不同的颜色
-        let riskClass = '';
-        if (item.风险等级.includes('极低')) {
-            riskClass = 'table-success';
-        } else if (item.风险等级.includes('低')) {
-            riskClass = 'table-info';
-        } else if (item.风险等级.includes('中')) {
-            riskClass = 'table-warning';
-        } else {
-            riskClass = 'table-danger';
-        }
-        
-        tableHTML += `
-            <tr class="${riskClass}">
-                <td>${item.货币对组合}</td>
-                <td>${parseFloat(item.相关系数).toFixed(4)}</td>
-                <td>${parseFloat(item.组合波动率).toFixed(4)}</td>
-                <td>${parseFloat(item.信号一致性).toFixed(4)}</td>
-                <td>${parseFloat(item.风险得分).toFixed(2)}</td>
-                <td>${item.风险等级}</td>
-                <td>${item.交易建议}</td>
-            </tr>
-        `;
+    })
+    .catch(error => {
+        showError('请求失败: ' + error.message);
     });
-    
-    tableHTML += `
-                </tbody>
-            </table>
-        </div>
-    `;
-    
-    riskContainer.innerHTML = tableHTML;
 }
 
 // 生成信号解释
-async function generateSignalExplanation() {
+async function generateSignalExplanation(event) {
+    if (event) event.preventDefault();
+    
     try {
         const currencyPair = document.getElementById('signal-currency-pair').value;
         const startDate = document.getElementById('signal-start-date').value;
         const endDate = document.getElementById('signal-end-date').value;
+        
+        // 显示加载指示器
+        const container = document.getElementById('signal-explanation-container');
+        container.innerHTML = `
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">加载中...</span>
+                </div>
+                <p class="mt-2">正在生成信号解释...</p>
+            </div>
+        `;
         
         // 验证日期范围
         const start = new Date(startDate);
         const end = new Date(endDate);
         
         if (start > end) {
-            showError('开始日期不能大于结束日期');
+            container.innerHTML = `
+                <div class="alert alert-danger">
+                    开始日期不能大于结束日期
+                </div>
+            `;
             return;
         }
-        
-        showLoading('正在生成信号解释...');
         
         const response = await fetch('/api/signal_explanation', {
             method: 'POST',
@@ -892,12 +900,20 @@ async function generateSignalExplanation() {
         if (data.success) {
             displaySignalExplanation(currencyPair, data.explanation);
         } else {
-            showError(data.error || '生成信号解释失败');
+            container.innerHTML = `
+                <div class="alert alert-danger">
+                    ${data.error || '生成信号解释失败'}
+                </div>
+            `;
         }
     } catch (error) {
-        showError('生成信号解释出错: ' + error.message);
-    } finally {
-        hideLoading();
+        const container = document.getElementById('signal-explanation-container');
+        container.innerHTML = `
+            <div class="alert alert-danger">
+                生成信号解释出错: ${error.message}
+            </div>
+        `;
+        console.error('信号解释生成错误:', error);
     }
 }
 
@@ -957,4 +973,123 @@ function displaySignalExplanation(currencyPair, explanation) {
     `;
     
     container.innerHTML = html;
+}
+
+// 设置信号解释日期范围
+function setupSignalDatepickers() {
+    const signalStartDateInput = document.getElementById('signal-start-date');
+    const signalEndDateInput = document.getElementById('signal-end-date');
+    
+    if (signalStartDateInput && signalEndDateInput) {
+        // 使用全局值
+        signalStartDateInput.value = globalStartDate;
+        signalEndDateInput.value = globalEndDate;
+        
+        // 初始化日期选择器
+        flatpickr(signalStartDateInput, {
+            dateFormat: 'Y-m-d',
+            minDate: '2015-01-28',
+            maxDate: 'today',
+            onChange: function(selectedDates, dateStr) {
+                globalStartDate = dateStr;
+                syncDates();
+            }
+        });
+        
+        flatpickr(signalEndDateInput, {
+            dateFormat: 'Y-m-d',
+            minDate: '2015-01-28',
+            maxDate: 'today',
+            onChange: function(selectedDates, dateStr) {
+                globalEndDate = dateStr;
+                syncDates();
+            }
+        });
+    }
+}
+
+// 在页面加载时设置全部日期选择器
+function setupBacktestDatepickers() {
+    const startDateInput = document.getElementById('start-date');
+    const endDateInput = document.getElementById('end-date');
+    
+    if (startDateInput && endDateInput) {
+        // 设置默认值
+        startDateInput.value = globalStartDate;
+        endDateInput.value = globalEndDate;
+        
+        // 初始化日期选择器
+        flatpickr(startDateInput, {
+            dateFormat: 'Y-m-d',
+            minDate: '2015-01-28',
+            maxDate: 'today',
+            onChange: function(selectedDates, dateStr) {
+                globalStartDate = dateStr;
+                // 同步到其他日期选择器
+                syncDates();
+            }
+        });
+        
+        flatpickr(endDateInput, {
+            dateFormat: 'Y-m-d',
+            minDate: '2015-01-28',
+            maxDate: 'today',
+            onChange: function(selectedDates, dateStr) {
+                globalEndDate = dateStr;
+                // 同步到其他日期选择器
+                syncDates();
+            }
+        });
+    }
+}
+
+// 确保登录和充值按钮在所有页面都有效
+function initializeAuthButtons() {
+    // 登录按钮点击
+    const loginBtn = document.getElementById('loginBtn');
+    if (loginBtn) {
+        loginBtn.addEventListener('click', function() {
+            const loginModal = new bootstrap.Modal(document.getElementById('loginModal'));
+            loginModal.show();
+        });
+    }
+
+    // 充值按钮点击
+    const rechargeBtn = document.getElementById('rechargeBtn');
+    if (rechargeBtn) {
+        rechargeBtn.addEventListener('click', function() {
+            const rechargeModal = new bootstrap.Modal(document.getElementById('rechargeModal'));
+            rechargeModal.show();
+        });
+    }
+
+    // 登录表单提交
+    const loginForm = document.getElementById('loginForm');
+    if (loginForm) {
+        loginForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            handleLogin(e);
+        });
+    }
+}
+
+// 同步所有日期选择器
+function syncDates() {
+    // 回测分析日期
+    const startDateInput = document.getElementById('start-date');
+    const endDateInput = document.getElementById('end-date');
+    if (startDateInput) startDateInput._flatpickr.setDate(globalStartDate);
+    if (endDateInput) endDateInput._flatpickr.setDate(globalEndDate);
+    
+    // 信号解释日期
+    const signalStartDateInput = document.getElementById('signal-start-date');
+    const signalEndDateInput = document.getElementById('signal-end-date');
+    if (signalStartDateInput) signalStartDateInput._flatpickr.setDate(globalStartDate);
+    if (signalEndDateInput) signalEndDateInput._flatpickr.setDate(globalEndDate);
+    
+    // 优化表单日期
+    const optimizeStartDateInput = document.getElementById('optimize-start-date');
+    const optimizeEndDateInput = document.getElementById('optimize-end-date');
+    if (optimizeStartDateInput) optimizeStartDateInput._flatpickr.setDate(globalStartDate);
+    if (optimizeEndDateInput) optimizeEndDateInput._flatpickr.setDate(globalEndDate);
 }

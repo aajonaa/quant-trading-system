@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>量化交易平台</title>
+    <title>回测分析 - 量化交易平台</title>
     <link rel="stylesheet" href="/static/lib/bootstrap/css/bootstrap.min.css">
     <link rel="stylesheet" href="/static/lib/flatpickr/flatpickr.min.css">
     <link rel="stylesheet" href="/static/lib/fontawesome/css/all.min.css">
@@ -20,7 +20,7 @@
             <div class="navbar-collapse">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
-                        <a class="nav-link" href="/backtest">回测分析</a>
+                        <a class="nav-link active" href="/backtest">回测分析</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="/signal">信号解释</a>
@@ -60,58 +60,55 @@
 
     <!-- 主要内容区 -->
     <div class="main-container">
-        <div class="container mt-5">
-            <div class="jumbotron text-center">
-                <h1>欢迎使用量化交易平台</h1>
-                <p class="lead">专业的外汇交易量化分析系统</p>
-                <hr class="my-4">
-                <p>请从上方导航栏选择您需要的功能</p>
-                <div class="feature-cards mt-5">
-                    <div class="row">
-                        <div class="col-md-3">
-                            <div class="card feature-card">
-                                <div class="card-body text-center">
-                                    <i class="fas fa-chart-line fa-3x mb-3"></i>
-                                    <h5 class="card-title">回测分析</h5>
-                                    <p class="card-text">基于历史数据进行策略回测分析</p>
-                                    <a href="/backtest" class="btn btn-primary">开始分析</a>
+        <!-- 回测分析模块 -->
+        <section id="backtest" class="section">
+            <div class="container">
+                <div class="section-header">
+                    <h2>回测分析</h2>
+                    <p>单一货币对历史回测分析</p>
+                </div>
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="params-card">
+                            <form id="backtestForm">
+                                <div class="form-group">
+                                    <label>选择货币对</label>
+                                    <select class="form-control" id="currency-pair">
+                                        <option value="CNYAUD">CNY/AUD</option>
+                                        <option value="CNYEUR">CNY/EUR</option>
+                                        <option value="CNYGBP">CNY/GBP</option>
+                                        <option value="CNYJPY">CNY/JPY</option>
+                                        <option value="CNYUSD">CNY/USD</option>
+                                    </select>
                                 </div>
-                            </div>
+                                <div class="form-group">
+                                    <label>回测区间</label>
+                                    <input type="text" class="form-control datepicker" id="start-date">
+                                    <input type="text" class="form-control datepicker mt-2" id="end-date">
+                                </div>
+                                <button type="submit" class="btn btn-primary btn-block">开始回测</button>
+                            </form>
                         </div>
-                        <div class="col-md-3">
-                            <div class="card feature-card">
-                                <div class="card-body text-center">
-                                    <i class="fas fa-signal fa-3x mb-3"></i>
-                                    <h5 class="card-title">信号解释</h5>
-                                    <p class="card-text">专业解读交易信号和市场趋势</p>
-                                    <a href="/signal" class="btn btn-primary">查看解释</a>
-                                </div>
+                    </div>
+                    <div class="col-md-9">
+                        <div class="results-card">
+                            <div class="metrics-row">
+                                <!-- 回测指标展示 -->
                             </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="card feature-card">
-                                <div class="card-body text-center">
-                                    <i class="fas fa-shield-alt fa-3x mb-3"></i>
-                                    <h5 class="card-title">风险控制</h5>
-                                    <p class="card-text">多货币对组合风险评估与管理</p>
-                                    <a href="/risk" class="btn btn-primary">风险评估</a>
-                                </div>
+                            <div class="chart-container">
+                                <canvas id="equity-curve"></canvas>
                             </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="card feature-card">
-                                <div class="card-body text-center">
-                                    <i class="fas fa-cogs fa-3x mb-3"></i>
-                                    <h5 class="card-title">策略优化</h5>
-                                    <p class="card-text">基于遗传算法的参数优化</p>
-                                    <a href="/optimize" class="btn btn-primary">开始优化</a>
-                                </div>
+                            <div class="chart-container mt-4">
+                                <canvas id="drawdown-curve"></canvas>
+                            </div>
+                            <div class="chart-container mt-4">
+                                <canvas id="monthly-returns"></canvas>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
+        </section>
     </div>
 
     <!-- 登录模态框 -->
@@ -238,4 +235,4 @@
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
     <script src="/static/script.js"></script>
 </body>
-</html>
+</html> 
