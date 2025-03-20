@@ -213,27 +213,6 @@ def multi_currency_risk():
         logger.error(f"多货币风险分析错误: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/risk_analysis', methods=['GET'])
-def risk_analysis():
-    try:
-        # 读取风险分析数据
-        risk_file = Path(__file__).parent / 'backend' / 'mulsignals' / 'currency_pair_risks.csv'
-        if not risk_file.exists():
-            return jsonify({'success': False, 'error': '风险数据文件不存在'})
-        
-        # 读取CSV文件
-        risk_data = pd.read_csv(risk_file)
-        
-        # 转换为JSON格式
-        risk_json = risk_data.to_dict(orient='records')
-        
-        return jsonify({
-            'success': True,
-            'data': risk_json
-        })
-        
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/signal_explanation', methods=['POST'])
 def signal_explanation():
