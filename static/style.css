@@ -1,10 +1,14 @@
 :root {
-    --primary-color: #1890ff;
-    --secondary-color: #096dd9;
-    --bg-color: #f0f2f5;
-    --text-color: #2c3e50;
-    --border-color: #e8e8e8;
-    --card-shadow: 0 2px 12px 0 rgba(0,0,0,.1);
+    --primary-color: #1e3a8a;     /* 深蓝色 - 金融行业常用 */
+    --secondary-color: #0f294d;   /* 更深的蓝色 */
+    --accent-color: #eab308;      /* 金色 - 象征财富 */
+    --bg-color: #f3f4f6;          /* 浅灰背景 */
+    --text-color: #1f2937;        /* 深灰色文本 */
+    --border-color: #d1d5db;      /* 浅灰边框 */
+    --success-color: #10b981;     /* 绿色 - 增长 */
+    --warning-color: #f59e0b;     /* 黄色 - 警告 */
+    --danger-color: #ef4444;      /* 红色 - 损失 */
+    --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
 
 /* 全局样式 */
@@ -19,7 +23,7 @@ body {
 .navbar {
     background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
     padding: 1rem 0;
-    box-shadow: 0 2px 8px rgba(0,0,0,.1);
+    box-shadow: 0 2px 8px rgba(0,0,0,.15);
 }
 
 .navbar-brand {
@@ -98,11 +102,14 @@ body {
     padding: 0.5rem 1.5rem;
     border-radius: 4px;
     transition: all 0.3s;
+    font-weight: 500;
 }
 
 .btn-primary:hover {
     background-color: var(--secondary-color);
     border-color: var(--secondary-color);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
 }
 
 .btn-block {
@@ -112,29 +119,37 @@ body {
 /* 图表容器样式 */
 .chart-container {
     position: relative;
-    height: auto;
-    min-height: 300px;
-    margin: 1rem 0;
+    height: 500px;
+    margin: 2rem 0;
     width: 100%;
+    background: white;
+    border-radius: 8px;
+    padding: 1rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
 }
 
 /* 指标展示样式 */
 .metrics-row {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 1rem;
+    gap: 1.5rem;
     margin-bottom: 1.5rem;
     background-color: #f8f9fa;
     border-radius: 8px;
-    padding: 1rem;
+    padding: 1.5rem;
 }
 
 .metric-card {
     background: white;
-    border-radius: 6px;
-    padding: 1rem;
+    border-radius: 8px;
+    padding: 1.5rem;
     text-align: center;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    transition: transform 0.2s;
+}
+
+.metric-card:hover {
+    transform: translateY(-3px);
 }
 
 .metric-label {
@@ -145,8 +160,9 @@ body {
 
 .metric-value {
     color: var(--primary-color);
-    font-size: 1.5rem;
-    font-weight: 500;
+    font-size: 1.8rem;
+    font-weight: 600;
+    margin-top: 0.5rem;
 }
 
 /* 客服面板样式 */
@@ -300,16 +316,18 @@ body {
 
 /* 加载动画样式 */
 .loading-overlay {
-    position: fixed;
+    position: absolute;
     top: 0;
     left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(255,255,255,.8);
+    width: 100%;
+    height: 100%;
+    background-color: rgba(255, 255, 255, 0.8);
     display: flex;
-    align-items: center;
+    flex-direction: column;
     justify-content: center;
-    z-index: 9999;
+    align-items: center;
+    z-index: 10;
+    border-radius: 8px;
 }
 
 .loading-spinner {
@@ -324,6 +342,12 @@ body {
 @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
+}
+
+.loading-overlay p {
+    margin-top: 1rem;
+    color: var(--primary-color);
+    font-weight: 500;
 }
 
 /* 充值模态框样式 */
@@ -482,11 +506,12 @@ body {
     transition: transform 0.3s, box-shadow 0.3s;
     border: none;
     box-shadow: var(--card-shadow);
+    border-top: 3px solid var(--primary-color);
 }
 
 .feature-card:hover {
     transform: translateY(-5px);
-    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
 }
 
 .feature-card .card-body {
@@ -494,7 +519,12 @@ body {
 }
 
 .feature-card .fa-3x {
+    color: var(--accent-color);
+}
+
+.feature-card .card-title {
     color: var(--primary-color);
+    font-weight: 600;
 }
 
 .feature-cards {
@@ -524,4 +554,118 @@ body {
 /* 添加信号解释容器样式 */
 #signal-explanation-container {
     min-height: 300px;
+}
+
+/* 添加金融行业元素 */
+.financial-metrics {
+    background: linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(243,244,246,0.9) 100%);
+    border-radius: 8px;
+    padding: 2rem;
+    margin: 3rem 0;
+    box-shadow: var(--card-shadow);
+    border-left: 4px solid var(--accent-color);
+}
+
+.financial-metrics h3 {
+    color: var(--primary-color);
+    font-weight: 600;
+    margin-bottom: 1.5rem;
+}
+
+.metric-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 1.5rem;
+}
+
+.metric-item i {
+    font-size: 1.5rem;
+    color: var(--accent-color);
+    margin-right: 1rem;
+}
+
+.metric-content h4 {
+    font-size: 1.1rem;
+    margin-bottom: 0.25rem;
+    color: var(--text-color);
+}
+
+.metric-content p {
+    color: #6b7280;
+    margin: 0;
+}
+
+/* 浮动消息样式 */
+.floating-message {
+    position: fixed;
+    top: 80px; /* 调整位置，避免遮挡导航栏 */
+    right: 20px;
+    padding: 12px 24px;
+    border-radius: 4px;
+    background-color: white;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+    z-index: 9999;
+    opacity: 0;
+    transform: translateY(-20px);
+    transition: all 0.3s ease;
+    pointer-events: none; /* 防止消息框影响其他元素的点击 */
+}
+
+.floating-message.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.floating-message.success {
+    background-color: #10b981;
+    color: white;
+}
+
+.floating-message.error {
+    background-color: #ef4444;
+    color: white;
+}
+
+/* 导航栏用户状态样式 */
+.nav-right {
+    display: flex;
+    align-items: center;
+}
+
+#guest-nav {
+    display: block; /* 默认显示登录按钮 */
+}
+
+#user-nav {
+    display: none; /* 默认隐藏个人主页 */
+}
+
+#user-nav .dropdown-toggle {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    color: white;
+    padding: 0.5rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+#user-nav .dropdown-toggle:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: white;
+}
+
+#user-nav .dropdown-menu {
+    margin-top: 0.5rem;
+    border: none;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+/* 确保模态框不会影响导航栏 */
+.modal {
+    z-index: 1050;
+}
+
+.modal-backdrop {
+    z-index: 1040;
 }

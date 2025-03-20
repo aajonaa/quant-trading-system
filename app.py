@@ -188,25 +188,38 @@ def logout():
         logger.error(f"退出登录API错误: {str(e)}")
         return jsonify({'error': f'服务器错误: {str(e)}'})
 
-@app.route('/api/single_backtest', methods=['POST'])
-def single_backtest():
+@app.route('/api/backtest', methods=['POST'])
+def backtest():
     try:
         data = request.get_json()
+        currency_pair = data.get('currency_pair')
+        start_date = data.get('start_date')
+        end_date = data.get('end_date')
+        
+        if not all([currency_pair, start_date, end_date]):
+            return jsonify({'success': False, 'error': '请提供所有必要参数'})
+        
+        # 创建回测器实例
         backtester = ForexBacktester()
+        
+        # 执行回测
         results = backtester.run_backtest(
-            currency_pair=data['currency_pair'],
-            start_date=data['start_date'],
-            end_date=data['end_date']
+            currency_pair=currency_pair,
+            start_date=start_date,
+            end_date=end_date
         )
-        return jsonify({
-            'success': True,
-            'results': results
-        })
+        
+        if results:
+            return jsonify({
+                'success': True,
+                'results': results
+            })
+        else:
+            return jsonify({'success': False, 'error': '回测执行失败'})
+        
     except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        logger.error(f"回测执行错误: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/multi_currency_risk', methods=['POST'])
 def multi_currency_risk():
@@ -300,6 +313,11 @@ def static_data(filename):
         if risk_file.exists():
             return open(risk_file, 'r').read(), 200, {'Content-Type': 'text/csv'}
     return "文件不存在", 404
+
+# 保留旧的路由作为兼容
+@app.route('/api/single_backtest', methods=['POST'])
+def single_backtest():
+    return backtest()  # 调用新的回测函数
 
 if __name__ == '__main__':
     app.run(debug=True)

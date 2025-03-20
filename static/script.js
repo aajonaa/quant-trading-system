@@ -31,6 +31,12 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log("检测到风险分析容器，开始加载数据...");
         setTimeout(loadRiskAnalysis, 500);
     }
+
+    // 初始化用户界面
+    initializeUserInterface();
+    
+    // 绑定退出登录事件
+    bindLogoutEvent();
 });
 
 // 安全地绑定事件监听器，避免null错误
@@ -180,7 +186,7 @@ function formatCurrentDate() {
     return `${year}-${month}-${day}`;
 }
 
-// 风险控制数据加载
+// 风险控制数据加载函数
 function loadRiskAnalysis() {
     console.log("开始加载风险分析数据...");
     const riskContainer = document.getElementById('risk-analysis-container');
@@ -199,101 +205,48 @@ function loadRiskAnalysis() {
         </div>
     `;
     
-    // 硬编码风险数据
-    const riskData = [
-        {
-            "货币对组合": "CNYEUR-CNYGBP",
-            "相关系数": "0.5816",
-            "组合波动率": "0.1471",
-            "信号一致性": "0.0329",
-            "风险得分": "28.67",
-            "风险等级": "中风险",
-            "交易建议": "建议减小敞口"
-        },
-        {
-            "货币对组合": "CNYAUD-CNYGBP",
-            "相关系数": "0.4844",
-            "组合波动率": "0.1665",
-            "信号一致性": "-0.042",
-            "风险得分": "25.63",
-            "风险等级": "中风险",
-            "交易建议": "建议减小敞口"
-        },
-        {
-            "货币对组合": "CNYAUD-CNYEUR",
-            "相关系数": "0.4642",
-            "组合波动率": "0.1522",
-            "信号一致性": "-0.0091",
-            "风险得分": "23.41",
-            "风险等级": "中风险",
-            "交易建议": "建议减小敞口"
-        },
-        {
-            "货币对组合": "CNYEUR-CNYJPY",
-            "相关系数": "0.4077",
-            "组合波动率": "0.139",
-            "信号一致性": "-0.025",
-            "风险得分": "21.23",
-            "风险等级": "中风险",
-            "交易建议": "建议减小敞口"
-        },
-        {
-            "货币对组合": "CNYJPY-CNYUSD",
-            "相关系数": "0.2403",
-            "组合波动率": "0.1078",
-            "信号一致性": "0.0689",
-            "风险得分": "14.91",
-            "风险等级": "低风险",
-            "交易建议": "建议持有"
-        },
-        {
-            "货币对组合": "CNYAUD-CNYJPY",
-            "相关系数": "0.1975",
-            "组合波动率": "0.1497",
-            "信号一致性": "0.0424",
-            "风险得分": "13.66",
-            "风险等级": "低风险",
-            "交易建议": "建议持有"
-        },
-        {
-            "货币对组合": "CNYGBP-CNYJPY",
-            "相关系数": "0.2005",
-            "组合波动率": "0.1405",
-            "信号一致性": "0.0303",
-            "风险得分": "13.14",
-            "风险等级": "低风险",
-            "交易建议": "建议持有"
-        },
-        {
-            "货币对组合": "CNYEUR-CNYUSD",
-            "相关系数": "0.2008",
-            "组合波动率": "0.0916",
-            "信号一致性": "-0.0303",
-            "风险得分": "11.69",
-            "风险等级": "低风险",
-            "交易建议": "建议持有"
-        },
-        {
-            "货币对组合": "CNYGBP-CNYUSD",
-            "相关系数": "0.1027",
-            "组合波动率": "0.1029",
-            "信号一致性": "0.0628",
-            "风险得分": "9.08",
-            "风险等级": "极低风险",
-            "交易建议": "可以增加敞口"
-        },
-        {
-            "货币对组合": "CNYAUD-CNYUSD",
-            "相关系数": "0.0347",
-            "组合波动率": "0.1115",
-            "信号一致性": "0.0049",
-            "风险得分": "4.88",
-            "风险等级": "极低风险",
-            "交易建议": "可以增加敞口"
-        }
-    ];
+    // 从后端API获取风险数据
+    fetch('/api/risk_analysis')
+        .then(response => response.json())
+        .then(result => {
+            console.log("获取到风险数据:", result);
+            if (result.success && result.data) {
+                // 显示风险数据
+                displayRiskAnalysis(result.data);
+            } else {
+                riskContainer.innerHTML = `
+                    <div class="alert alert-danger">
+                        ${result.error || '加载风险分析数据失败'}
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            console.error("风险数据获取错误:", error);
+            riskContainer.innerHTML = `
+                <div class="alert alert-danger">
+                    获取风险数据出错: ${error.message}
+                </div>
+            `;
+        });
+}
+
+// 显示风险分析结果
+function displayRiskAnalysis(riskData) {
+    console.log("执行显示风险分析函数");
+    const riskContainer = document.getElementById('risk-analysis-container');
+    if (!riskContainer) {
+        console.error("找不到风险分析容器");
+        return;
+    }
     
-    // 直接创建表格
+    if (!Array.isArray(riskData) || riskData.length === 0) {
+        console.error("风险数据无效:", riskData);
+        riskContainer.innerHTML = '<div class="alert alert-warning">没有可用的风险分析数据</div>';
+        return;
+    }
+    
+    // 创建表格
     let tableHTML = `
         <div class="table-responsive mt-4">
             <table class="table table-striped table-hover">
@@ -327,13 +280,13 @@ function loadRiskAnalysis() {
         
         tableHTML += `
             <tr class="${riskClass}">
-                <td>${item.货币对组合}</td>
-                <td>${item.相关系数}</td>
-                <td>${item.组合波动率}</td>
-                <td>${item.信号一致性}</td>
-                <td>${item.风险得分}</td>
-                <td>${item.风险等级}</td>
-                <td>${item.交易建议}</td>
+                <td>${item.货币对组合 || '-'}</td>
+                <td>${item.相关系数 || '-'}</td>
+                <td>${item.组合波动率 || '-'}</td>
+                <td>${item.信号一致性 || '-'}</td>
+                <td>${item.风险得分 || '-'}</td>
+                <td>${item.风险等级 || '-'}</td>
+                <td>${item.交易建议 || '-'}</td>
             </tr>
         `;
     });
@@ -348,26 +301,23 @@ function loadRiskAnalysis() {
     console.log("风险分析表格已生成");
 }
 
-// 回测功能实现
+// 添加全局图表变量
+let equityChart = null;
+let drawdownChart = null;
+let monthlyReturnsChart = null;
+
+// 回测分析执行
 async function runBacktest() {
     try {
         const currencyPair = document.getElementById('currency-pair').value;
         const startDate = document.getElementById('start-date').value;
         const endDate = document.getElementById('end-date').value;
-
-        // 验证日期范围
-        const start = new Date(startDate);
-        const end = new Date(endDate);
-        const today = new Date();
         
-        if (start > end || end > today) {
-            showError('请选择有效的日期范围');
-            return;
-        }
-
-        showLoading('正在执行回测分析...');
-
-        const response = await fetch('/api/single_backtest', {
+        // 显示加载状态
+        showLoading();
+        
+        // 发送回测请求
+        const response = await fetch('/api/backtest', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -378,117 +328,220 @@ async function runBacktest() {
                 end_date: endDate
             })
         });
-
+        
         const data = await response.json();
-
+        
         if (data.success) {
             displayBacktestResults(data.results);
         } else {
             showError(data.error || '回测执行失败');
         }
     } catch (error) {
+        console.error('回测执行错误:', error);
         showError('回测执行出错: ' + error.message);
     } finally {
         hideLoading();
     }
 }
 
+// 修改回测分析结果显示函数
 function displayBacktestResults(results) {
-    // 清空指标行并添加新指标
-    const metricsRow = document.querySelector('.metrics-row');
-    if (metricsRow) {
-        metricsRow.innerHTML = `
-            <div class="metric-card">
-                <div class="metric-label">总收益率</div>
-                <div class="metric-value">${(results.total_return * 100).toFixed(2)}%</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-label">夏普比率</div>
-                <div class="metric-value">${results.sharpe_ratio.toFixed(2)}</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-label">最大回撤</div>
-                <div class="metric-value">${(results.max_drawdown * 100).toFixed(2)}%</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-label">胜率</div>
-                <div class="metric-value">${(results.win_rate * 100).toFixed(2)}%</div>
-            </div>
-        `;
-    }
+    try {
+        // 清空指标行并添加新指标
+        const metricsRow = document.querySelector('.metrics-row');
+        if (metricsRow) {
+            metricsRow.innerHTML = `
+                <div class="metric-card">
+                    <div class="metric-label">总收益率</div>
+                    <div class="metric-value">${(results.total_return * 100).toFixed(2)}%</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">夏普比率</div>
+                    <div class="metric-value">${results.sharpe_ratio.toFixed(2)}</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">最大回撤</div>
+                    <div class="metric-value">${(results.max_drawdown * 100).toFixed(2)}%</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">胜率</div>
+                    <div class="metric-value">${(results.win_rate * 100).toFixed(2)}%</div>
+                </div>
+            `;
+        }
 
-    // 优化权益曲线图表配置
-    const ctx = document.getElementById('equity-curve').getContext('2d');
-    if (equityChart) {
-        equityChart.destroy();
-    }
+        // 找到图表容器并清除其中任何存在的元素
+        const chartContainer = document.querySelector('.chart-container');
+        if (chartContainer) {
+            // 调整容器高度以适应单个图表
+            chartContainer.style.height = '500px';
+        }
 
-    // 准备图表数据
-    const chartData = [];
-    const equityCurve = results.equity_curve;
-    for (const date in equityCurve) {
-        chartData.push({
-            x: new Date(date),
-            y: equityCurve[date]
-        });
-    }
-
-    // 设置更适合显示的图表高度
-    const chartContainer = document.querySelector('.chart-container');
-    if (chartContainer) {
-        chartContainer.style.height = '350px';
-    }
-
-    // 创建图表，使用更适合的配置
-    equityChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            datasets: [{
-                label: '账户权益',
-                data: chartData,
-                borderColor: 'rgb(75, 192, 192)',
-                backgroundColor: 'rgba(75, 192, 192, 0.1)',
-                fill: true,
-                tension: 0.1,
-                pointRadius: 0,
-                borderWidth: 2
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: {
-                intersect: false,
-                mode: 'index'
-            },
-            plugins: {
-                tooltip: {
-                    enabled: true,
-                    mode: 'index',
-                    intersect: false
-                }
-            },
-            scales: {
-                x: {
-                    type: 'time',
-                    time: {
-                        unit: 'month',
-                        displayFormats: {
-                            month: 'yyyy-MM'
+        // 仅保留并优化权益曲线图表
+        const equityCurveCtx = document.getElementById('equity-curve');
+        if (equityCurveCtx) {
+            // 销毁旧图表
+            if (equityChart) {
+                equityChart.destroy();
+            }
+            
+            // 准备图表数据
+            const chartData = [];
+            const equityCurve = results.equity_curve;
+            for (const date in equityCurve) {
+                chartData.push({
+                    x: new Date(date),
+                    y: equityCurve[date]
+                });
+            }
+            
+            // 创建新图表 - 优化配置以更好地适应容器
+            equityChart = new Chart(equityCurveCtx.getContext('2d'), {
+                type: 'line',
+                data: {
+                    datasets: [{
+                        label: '账户权益',
+                        data: chartData,
+                        borderColor: 'rgb(30, 58, 138)', // 使用深蓝色主题色
+                        backgroundColor: 'rgba(30, 58, 138, 0.1)',
+                        fill: true,
+                        tension: 0.2,
+                        pointRadius: 1,
+                        pointHoverRadius: 5,
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: {
+                                font: {
+                                    size: 14,
+                                    weight: 'bold'
+                                }
+                            }
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            backgroundColor: 'rgba(15, 41, 77, 0.8)',
+                            titleColor: '#fff',
+                            bodyColor: '#fff',
+                            titleFont: {
+                                size: 14,
+                                weight: 'bold'
+                            },
+                            bodyFont: {
+                                size: 13
+                            },
+                            padding: 12,
+                            cornerRadius: 6,
+                            displayColors: false
                         }
                     },
-                    ticks: {
-                        source: 'auto',
-                        autoSkip: true,
-                        maxTicksLimit: 12
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: {
+                                unit: 'month',
+                                displayFormats: {
+                                    month: 'yyyy-MM'
+                                }
+                            },
+                            grid: {
+                                display: false
+                            },
+                            ticks: {
+                                maxRotation: 0,
+                                autoSkip: true,
+                                maxTicksLimit: 12,
+                                font: {
+                                    size: 12
+                                }
+                            }
+                        },
+                        y: {
+                            beginAtZero: false,
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.05)'
+                            },
+                            ticks: {
+                                font: {
+                                    size: 12
+                                },
+                                callback: function(value) {
+                                    return value.toFixed(2);
+                                }
+                            }
+                        }
                     }
-                },
-                y: {
-                    beginAtZero: false
                 }
-            }
+            });
         }
-    });
+
+        // 移除回撤曲线和月度收益图表的容器
+        const drawdownContainer = document.getElementById('drawdown-curve');
+        if (drawdownContainer) {
+            drawdownContainer.parentElement.remove();
+        }
+
+        const monthlyReturnsContainer = document.getElementById('monthly-returns');
+        if (monthlyReturnsContainer) {
+            monthlyReturnsContainer.parentElement.remove();
+        }
+
+    } catch (error) {
+        console.error('显示回测结果错误:', error);
+        showError('显示回测结果错误: ' + error.message);
+    }
+}
+
+// 显示加载状态
+function showLoading() {
+    const resultsCard = document.querySelector('.results-card');
+    if (resultsCard) {
+        const loadingDiv = document.createElement('div');
+        loadingDiv.className = 'loading-overlay';
+        loadingDiv.innerHTML = `
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">加载中...</span>
+            </div>
+            <p class="mt-2">正在分析数据...</p>
+        `;
+        resultsCard.appendChild(loadingDiv);
+    }
+}
+
+// 隐藏加载状态
+function hideLoading() {
+    const loadingOverlay = document.querySelector('.loading-overlay');
+    if (loadingOverlay) {
+        loadingOverlay.remove();
+    }
+}
+
+// 显示错误消息
+function showError(message) {
+    const alert = document.createElement('div');
+    alert.className = 'alert alert-danger alert-dismissible fade show';
+    alert.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    `;
+    
+    const container = document.querySelector('.container');
+    if (container) {
+        container.insertBefore(alert, container.firstChild);
+        
+        // 5秒后自动关闭
+        setTimeout(() => {
+            const bsAlert = new bootstrap.Alert(alert);
+            bsAlert.close();
+        }, 5000);
+    }
 }
 
 // 多货币风险分析
@@ -747,56 +800,40 @@ document.getElementById('csInput').addEventListener('keypress', function(e) {
     }
 });
 
-// 工具函数
-function showLoading(message) {
-    const overlay = document.createElement('div');
-    overlay.className = 'loading-overlay';
-    overlay.innerHTML = `
-        <div class="loading-content">
-            <div class="loading-spinner"></div>
-            <div class="mt-3">${message}</div>
-        </div>
-    `;
-    document.body.appendChild(overlay);
-}
-
-function hideLoading() {
-    const overlay = document.querySelector('.loading-overlay');
-    if (overlay) {
-        overlay.remove();
-    }
-}
-
-function showError(message) {
-    alert(message);
-}
-
 // 检查登录状态
 function checkLoginStatus() {
     const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
-    const guestNav = document.getElementById('guest-nav');
-    const userNav = document.getElementById('user-nav');
+    const username = localStorage.getItem('username');
     
-    if (isLoggedIn && guestNav && userNav) {
-        guestNav.style.display = 'none';
-        userNav.style.display = 'flex';
-    }
+    // 更新导航栏显示
+    updateNavigation(isLoggedIn, username);
 }
 
-// 退出登录
-function logout() {
-    localStorage.removeItem('isLoggedIn');
-    localStorage.removeItem('username');
+// 更新导航栏显示
+function updateNavigation(isLoggedIn, username = '') {
     const guestNav = document.getElementById('guest-nav');
     const userNav = document.getElementById('user-nav');
     
-    if (guestNav && userNav) {
-        guestNav.style.display = 'flex';
+    if (!guestNav || !userNav) return;
+    
+    if (isLoggedIn && username) {
+        // 登录状态：隐藏登录按钮，显示个人主页
+        guestNav.style.display = 'none';
+        userNav.style.display = 'block';
+        
+        // 更新用户名显示
+        const usernameText = userNav.querySelector('.username-text');
+        if (usernameText) {
+            usernameText.textContent = username;
+        }
+    } else {
+        // 未登录状态：显示登录按钮，隐藏个人主页
+        guestNav.style.display = 'block';
         userNav.style.display = 'none';
     }
 }
 
-// 修改登录处理函数
+// 处理登录
 function handleLogin(e) {
     e.preventDefault();
     
@@ -804,10 +841,11 @@ function handleLogin(e) {
     const password = document.getElementById('password').value;
     
     if (!username || !password) {
-        showError('请输入用户名和密码');
+        showFloatingMessage('请输入用户名和密码', 'error');
         return;
     }
     
+    // 模拟登录请求
     fetch('/api/login', {
         method: 'POST',
         headers: {
@@ -823,30 +861,55 @@ function handleLogin(e) {
             if (loginModal) {
                 loginModal.hide();
                 
-                // 手动移除模态框背景
+                // 移除模态框背景
                 const modalBackdrops = document.querySelectorAll('.modal-backdrop');
-                modalBackdrops.forEach(backdrop => {
-                    backdrop.classList.remove('show');
-                    setTimeout(() => backdrop.remove(), 150);
-                });
+                modalBackdrops.forEach(backdrop => backdrop.remove());
             }
-            
-            // 更新用户界面
-            document.getElementById('guest-nav').style.display = 'none';
-            document.getElementById('user-nav').style.display = 'flex';
             
             // 保存登录状态
             localStorage.setItem('isLoggedIn', 'true');
-            localStorage.setItem('username', data.user.username);
+            localStorage.setItem('username', username);
+            
+            // 更新导航栏显示
+            updateNavigation(true, username);
             
             // 显示成功消息
-            showSuccess('登录成功！');
+            showFloatingMessage('登录成功！', 'success');
         } else {
-            showError(data.error || '登录失败');
+            showFloatingMessage(data.error || '登录失败', 'error');
         }
     })
     .catch(error => {
-        showError('请求失败: ' + error.message);
+        showFloatingMessage('请求失败: ' + error.message, 'error');
+    });
+}
+
+// 处理退出登录
+function logout() {
+    fetch('/api/logout', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // 清除登录状态
+            localStorage.removeItem('isLoggedIn');
+            localStorage.removeItem('username');
+            
+            // 更新导航栏显示
+            updateNavigation(false);
+            
+            // 显示成功消息
+            showFloatingMessage('已成功退出登录', 'success');
+        } else {
+            showFloatingMessage(data.error || '退出登录失败', 'error');
+        }
+    })
+    .catch(error => {
+        showFloatingMessage('请求失败: ' + error.message, 'error');
     });
 }
 
@@ -1092,4 +1155,77 @@ function syncDates() {
     const optimizeEndDateInput = document.getElementById('optimize-end-date');
     if (optimizeStartDateInput) optimizeStartDateInput._flatpickr.setDate(globalStartDate);
     if (optimizeEndDateInput) optimizeEndDateInput._flatpickr.setDate(globalEndDate);
+}
+
+// 添加显示成功消息的函数
+function showSuccess(message) {
+    const alert = document.createElement('div');
+    alert.className = 'alert alert-success alert-dismissible fade show';
+    alert.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    `;
+    
+    const container = document.querySelector('.container');
+    if (container) {
+        container.insertBefore(alert, container.firstChild);
+        
+        // 5秒后自动关闭
+        setTimeout(() => {
+            const bsAlert = new bootstrap.Alert(alert);
+            bsAlert.close();
+        }, 5000);
+    }
+}
+
+// 显示浮动消息
+function showFloatingMessage(message, type = 'success') {
+    // 创建消息容器
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `floating-message ${type}`;
+    messageDiv.innerHTML = message;
+    
+    // 添加到页面
+    document.body.appendChild(messageDiv);
+    
+    // 显示动画
+    setTimeout(() => {
+        messageDiv.classList.add('show');
+    }, 100);
+    
+    // 5秒后移除
+    setTimeout(() => {
+        messageDiv.classList.remove('show');
+        setTimeout(() => {
+            messageDiv.remove();
+        }, 300);
+    }, 5000);
+}
+
+// 初始化用户界面
+function initializeUserInterface() {
+    const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+    const username = localStorage.getItem('username');
+    
+    updateNavigation(isLoggedIn, username);
+    
+    // 绑定登录按钮事件
+    const loginBtn = document.getElementById('loginBtn');
+    if (loginBtn) {
+        loginBtn.addEventListener('click', function() {
+            const loginModal = new bootstrap.Modal(document.getElementById('loginModal'));
+            loginModal.show();
+        });
+    }
+}
+
+// 绑定退出登录事件
+function bindLogoutEvent() {
+    const logoutLink = document.querySelector('.logout-link');
+    if (logoutLink) {
+        logoutLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            logout();
+        });
+    }
 }
