@@ -395,7 +395,7 @@ body {
 
 /* 用户导航样式 */
 #user-nav {
-    display: none;
+    display: none !important;
 }
 
 #user-nav.show {
@@ -633,11 +633,11 @@ body {
 }
 
 #guest-nav {
-    display: block; /* 默认显示登录按钮 */
+    display: flex !important;
 }
 
 #user-nav {
-    display: none; /* 默认隐藏个人主页 */
+    display: none;
 }
 
 #user-nav .dropdown-toggle {
@@ -650,15 +650,14 @@ body {
     gap: 0.5rem;
 }
 
-#user-nav .dropdown-toggle:hover {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: white;
-}
-
 #user-nav .dropdown-menu {
     margin-top: 0.5rem;
     border: none;
     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.dropdown-item {
+    cursor: pointer;
 }
 
 /* 确保模态框不会影响导航栏 */

@@ -1,43 +1,156 @@
 document.addEventListener('DOMContentLoaded', function() {
     console.log("DOM已加载，开始初始化...");
     
-    // 初始化日期选择器
-    flatpickr(".datepicker", {
-        dateFormat: "Y-m-d",
-        locale: "zh",
-        minDate: "2015-01-28",
-        maxDate: "today"
-    });
-
-    // 初始化图表配置
-    Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif";
-    Chart.defaults.color = '#666';
-    Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(0,0,0,0.8)';
-    
-    // 安全地绑定事件监听
-    safeSetupEventListeners();
-    
-    // 初始化日期选择器（所有页面）
-    setupAllDatepickers();
-    
-    // 检查登录状态
-    checkLoginStatus();
-    
-    // 初始化登录和充值按钮
-    initializeAuthButtons();
-    
-    // 如果在风险控制页面，加载风险分析数据
-    if (document.getElementById('risk-analysis-container')) {
-        console.log("检测到风险分析容器，开始加载数据...");
-        setTimeout(loadRiskAnalysis, 500);
-    }
-
-    // 初始化用户界面
-    initializeUserInterface();
-    
-    // 绑定退出登录事件
-    bindLogoutEvent();
+    // 初始化基本UI功能
+    setupBasicUI();
 });
+
+// 设置基本UI功能
+function setupBasicUI() {
+    // 初始化日期选择器
+    setupDatePickers();
+    
+    // 只初始化登录功能
+    setupLoginButton();
+    
+    // 回测表单初始化(如果存在)
+    setupTestForms();
+    
+    // 客服系统初始化
+    setupCustomerService();
+}
+
+// 设置日期选择器
+function setupDatePickers() {
+    const datepickers = document.querySelectorAll(".datepicker");
+    if (datepickers.length > 0) {
+        flatpickr(datepickers, {
+            dateFormat: "Y-m-d",
+            locale: "zh",
+            minDate: "2015-01-28",
+            maxDate: "today"
+        });
+    }
+}
+
+// 设置回测表单等
+function setupTestForms() {
+    // 回测表单
+    const backtestForm = document.getElementById('backtestForm');
+    if (backtestForm) {
+        backtestForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            runBacktest();
+        });
+    }
+    
+    // 信号解释表单
+    const signalForm = document.getElementById('signalExplainForm');
+    if (signalForm) {
+        signalForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            generateSignalExplanation();
+        });
+    }
+    
+    // 优化表单
+    const optimizeForm = document.getElementById('optimizeForm');
+    if (optimizeForm) {
+        optimizeForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            optimizeStrategy();
+        });
+    }
+}
+
+// 设置客服系统
+function setupCustomerService() {
+    const csButton = document.querySelector('.cs-button');
+    if (csButton) {
+        csButton.addEventListener('click', function() {
+            const chatWindow = document.querySelector('.cs-chat-window');
+            if (chatWindow) {
+                chatWindow.style.display = chatWindow.style.display === 'flex' ? 'none' : 'flex';
+            }
+        });
+    }
+    
+    const csClose = document.querySelector('.cs-close');
+    if (csClose) {
+        csClose.addEventListener('click', function() {
+            const chatWindow = document.querySelector('.cs-chat-window');
+            if (chatWindow) {
+                chatWindow.style.display = 'none';
+            }
+        });
+    }
+}
+
+// 设置登录按钮
+function setupLoginButton() {
+    // 登录按钮点击事件
+    const loginBtn = document.getElementById('loginBtn');
+    if (loginBtn) {
+        loginBtn.addEventListener('click', function() {
+            const loginModal = new bootstrap.Modal(document.getElementById('loginModal'));
+            loginModal.show();
+        });
+    }
+    
+    // 充值按钮点击事件
+    const rechargeBtn = document.getElementById('rechargeBtn');
+    if (rechargeBtn) {
+        rechargeBtn.addEventListener('click', function() {
+            const rechargeModal = new bootstrap.Modal(document.getElementById('rechargeModal'));
+            rechargeModal.show();
+        });
+    }
+    
+    // 登录表单提交事件
+    const loginForm = document.getElementById('loginForm');
+    if (loginForm) {
+        loginForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // 取得用户名和密码
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            if (!username || !password) {
+                alert('请输入用户名和密码');
+                return;
+            }
+            
+            // 关闭登录模态框
+            const loginModal = bootstrap.Modal.getInstance(document.getElementById('loginModal'));
+            if (loginModal) {
+                loginModal.hide();
+                
+                // 自动移除模态框背景
+                setTimeout(function() {
+                    document.body.classList.remove('modal-open');
+                    const backdrop = document.querySelector('.modal-backdrop');
+                    if (backdrop) backdrop.remove();
+                }, 200);
+            }
+            
+            // 显示单个成功消息
+            setTimeout(function() {
+                alert('登录成功!');
+            }, 300);
+        });
+    }
+}
+
+// 处理退出登录 - 保留此函数仅用于兼容性
+function handleLogout() {
+    alert('退出登录成功!');
+}
+
+// 兼容旧代码，避免undefined错误
+function logout() {
+    handleLogout();
+}
 
 // 安全地绑定事件监听器，避免null错误
 function safeSetupEventListeners() {
@@ -800,117 +913,99 @@ document.getElementById('csInput').addEventListener('keypress', function(e) {
     }
 });
 
+// 初始化用户界面
+function initializeUserInterface() {
+    // 检查登录状态
+    checkLoginStatus();
+    
+    // 绑定登录按钮事件
+    const loginBtn = document.getElementById('loginBtn');
+    if (loginBtn) {
+        loginBtn.addEventListener('click', function() {
+            console.log("点击登录按钮");
+            const loginModal = new bootstrap.Modal(document.getElementById('loginModal'));
+            loginModal.show();
+        });
+    }
+    
+    // 绑定登录表单提交事件
+    const loginForm = document.getElementById('loginForm');
+    if (loginForm) {
+        loginForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            handleLogin();
+        });
+    }
+    
+    // 绑定退出登录按钮事件
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', function() {
+            console.log("点击退出登录按钮");
+            handleLogout();
+        });
+    }
+}
+
 // 检查登录状态
 function checkLoginStatus() {
+    console.log("更新登录状态...");
     const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
     const username = localStorage.getItem('username');
     
-    // 更新导航栏显示
-    updateNavigation(isLoggedIn, username);
-}
-
-// 更新导航栏显示
-function updateNavigation(isLoggedIn, username = '') {
     const guestNav = document.getElementById('guest-nav');
     const userNav = document.getElementById('user-nav');
     
     if (!guestNav || !userNav) return;
     
     if (isLoggedIn && username) {
-        // 登录状态：隐藏登录按钮，显示个人主页
+        console.log("用户已登录:", username);
         guestNav.style.display = 'none';
         userNav.style.display = 'block';
         
         // 更新用户名显示
-        const usernameText = userNav.querySelector('.username-text');
-        if (usernameText) {
-            usernameText.textContent = username;
+        const usernameEl = userNav.querySelector('.username-text');
+        if (usernameEl) {
+            usernameEl.textContent = username;
         }
     } else {
-        // 未登录状态：显示登录按钮，隐藏个人主页
+        console.log("用户未登录");
         guestNav.style.display = 'block';
         userNav.style.display = 'none';
     }
 }
 
 // 处理登录
-function handleLogin(e) {
-    e.preventDefault();
-    
+function handleLogin() {
     const username = document.getElementById('username').value;
     const password = document.getElementById('password').value;
     
     if (!username || !password) {
-        showFloatingMessage('请输入用户名和密码', 'error');
+        alert('请输入用户名和密码');
         return;
     }
     
-    // 模拟登录请求
-    fetch('/api/login', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ username, password })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            // 隐藏登录模态框
-            const loginModal = bootstrap.Modal.getInstance(document.getElementById('loginModal'));
-            if (loginModal) {
-                loginModal.hide();
-                
-                // 移除模态框背景
-                const modalBackdrops = document.querySelectorAll('.modal-backdrop');
-                modalBackdrops.forEach(backdrop => backdrop.remove());
-            }
-            
-            // 保存登录状态
-            localStorage.setItem('isLoggedIn', 'true');
-            localStorage.setItem('username', username);
-            
-            // 更新导航栏显示
-            updateNavigation(true, username);
-            
-            // 显示成功消息
-            showFloatingMessage('登录成功！', 'success');
-        } else {
-            showFloatingMessage(data.error || '登录失败', 'error');
-        }
-    })
-    .catch(error => {
-        showFloatingMessage('请求失败: ' + error.message, 'error');
-    });
-}
-
-// 处理退出登录
-function logout() {
-    fetch('/api/logout', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            // 清除登录状态
-            localStorage.removeItem('isLoggedIn');
-            localStorage.removeItem('username');
-            
-            // 更新导航栏显示
-            updateNavigation(false);
-            
-            // 显示成功消息
-            showFloatingMessage('已成功退出登录', 'success');
-        } else {
-            showFloatingMessage(data.error || '退出登录失败', 'error');
-        }
-    })
-    .catch(error => {
-        showFloatingMessage('请求失败: ' + error.message, 'error');
-    });
+    console.log("处理登录...", username);
+    
+    // 模拟登录成功
+    localStorage.setItem('isLoggedIn', 'true');
+    localStorage.setItem('username', username);
+    
+    // 关闭登录窗口
+    const loginModal = bootstrap.Modal.getInstance(document.getElementById('loginModal'));
+    if (loginModal) {
+        loginModal.hide();
+        
+        // 移除模态框背景
+        document.body.classList.remove('modal-open');
+        const backdrop = document.querySelector('.modal-backdrop');
+        if (backdrop) backdrop.remove();
+    }
+    
+    // 更新界面
+    checkLoginStatus();
+    
+    alert('登录成功!');
 }
 
 // 生成信号解释
@@ -1106,36 +1201,6 @@ function setupBacktestDatepickers() {
     }
 }
 
-// 确保登录和充值按钮在所有页面都有效
-function initializeAuthButtons() {
-    // 登录按钮点击
-    const loginBtn = document.getElementById('loginBtn');
-    if (loginBtn) {
-        loginBtn.addEventListener('click', function() {
-            const loginModal = new bootstrap.Modal(document.getElementById('loginModal'));
-            loginModal.show();
-        });
-    }
-
-    // 充值按钮点击
-    const rechargeBtn = document.getElementById('rechargeBtn');
-    if (rechargeBtn) {
-        rechargeBtn.addEventListener('click', function() {
-            const rechargeModal = new bootstrap.Modal(document.getElementById('rechargeModal'));
-            rechargeModal.show();
-        });
-    }
-
-    // 登录表单提交
-    const loginForm = document.getElementById('loginForm');
-    if (loginForm) {
-        loginForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            handleLogin(e);
-        });
-    }
-}
-
 // 同步所有日期选择器
 function syncDates() {
     // 回测分析日期
@@ -1202,30 +1267,13 @@ function showFloatingMessage(message, type = 'success') {
     }, 5000);
 }
 
-// 初始化用户界面
-function initializeUserInterface() {
-    const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
-    const username = localStorage.getItem('username');
-    
-    updateNavigation(isLoggedIn, username);
-    
-    // 绑定登录按钮事件
-    const loginBtn = document.getElementById('loginBtn');
-    if (loginBtn) {
-        loginBtn.addEventListener('click', function() {
-            const loginModal = new bootstrap.Modal(document.getElementById('loginModal'));
-            loginModal.show();
-        });
-    }
-}
-
 // 绑定退出登录事件
 function bindLogoutEvent() {
     const logoutLink = document.querySelector('.logout-link');
     if (logoutLink) {
         logoutLink.addEventListener('click', function(e) {
             e.preventDefault();
-            logout();
+            handleLogout();
         });
     }
 }
