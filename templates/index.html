@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>量化交易平台</title>
+    <link rel="stylesheet" href="/static/lib/bootstrap/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/static/lib/flatpickr/flatpickr.min.css">
+    <link rel="stylesheet" href="/static/lib/fontawesome/css/all.min.css">
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+</head>
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar navbar-expand-lg">
+        <div class="container">
+            <a class="navbar-brand" href="/">量化交易平台</a>
+            <div class="navbar-collapse">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/backtest">回测分析</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/signal">信号解释</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/risk">风险控制</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/optimize">策略优化</a>
+                    </li>
+                </ul>
+                <div class="nav-right">
+                    <!-- 未登录状态 -->
+                    <div id="guest-nav" class="d-flex">
+                        <button id="rechargeBtn" class="btn btn-outline-light me-2">充值</button>
+                        <button id="loginBtn" class="btn btn-outline-light">登录</button>
+                    </div>
+
+                    <!-- 登录状态 -->
+                    <div id="user-nav" class="d-flex align-items-center" style="display: none !important;">
+                        <div class="dropdown">
+                            <button class="btn btn-outline-light dropdown-toggle" type="button" id="userDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="fas fa-user me-2"></i>我的主页
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+                                <li><a class="dropdown-item" href="/my-account"><i class="fas fa-home me-2"></i>个人中心</a></li>
+                                <li><a class="dropdown-item" href="/settings"><i class="fas fa-cog me-2"></i>设置</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="#" onclick="logout()"><i class="fas fa-sign-out-alt me-2"></i>退出登录</a></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 主要内容区 -->
+    <div class="main-container">
+        <div class="container mt-5">
+            <div class="jumbotron text-center">
+                <h1>欢迎使用量化交易平台</h1>
+                <p class="lead">专业的外汇交易量化分析系统</p>
+                <hr class="my-4">
+                <p>请从上方导航栏选择您需要的功能</p>
+                <div class="feature-cards mt-5">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="card feature-card">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-chart-line fa-3x mb-3"></i>
+                                    <h5 class="card-title">回测分析</h5>
+                                    <p class="card-text">基于历史数据进行策略回测分析</p>
+                                    <a href="/backtest" class="btn btn-primary">开始分析</a>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card feature-card">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-signal fa-3x mb-3"></i>
+                                    <h5 class="card-title">信号解释</h5>
+                                    <p class="card-text">专业解读交易信号和市场趋势</p>
+                                    <a href="/signal" class="btn btn-primary">查看解释</a>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card feature-card">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-shield-alt fa-3x mb-3"></i>
+                                    <h5 class="card-title">风险控制</h5>
+                                    <p class="card-text">多货币对组合风险评估与管理</p>
+                                    <a href="/risk" class="btn btn-primary">风险评估</a>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card feature-card">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-cogs fa-3x mb-3"></i>
+                                    <h5 class="card-title">策略优化</h5>
+                                    <p class="card-text">基于遗传算法的参数优化</p>
+                                    <a href="/optimize" class="btn btn-primary">开始优化</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="container mt-5">
+            <div class="financial-metrics">
+                <h3 class="text-center mb-4">专业量化交易助您决胜市场</h3>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="metric-item">
+                            <i class="fas fa-chart-line"></i>
+                            <div class="metric-content">
+                                <h4>数据驱动决策</h4>
+                                <p>基于历史数据和模型分析，制定更科学的交易决策，避免情绪化交易</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="metric-item">
+                            <i class="fas fa-shield-alt"></i>
+                            <div class="metric-content">
+                                <h4>系统化风险管理</h4>
+                                <p>多维度风险评估，有效控制仓位和敞口，降低市场波动对资产的影响</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row mt-3">
+                    <div class="col-md-6">
+                        <div class="metric-item">
+                            <i class="fas fa-robot"></i>
+                            <div class="metric-content">
+                                <h4>机器学习算法</h4>
+                                <p>运用先进的AI技术分析市场结构和价格模式，捕捉交易机会</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="metric-item">
+                            <i class="fas fa-cogs"></i>
+                            <div class="metric-content">
+                                <h4>策略持续优化</h4>
+                                <p>基于遗传算法和参数优化，不断提升策略表现，适应市场变化</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="text-center mt-4">
+                    <p class="text-muted"><small>* 过往业绩不代表未来表现，投资有风险，交易需谨慎</small></p>
+                </div>
+            </div>
+            
+            <div class="row mt-5">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-body">
+                            <h4 class="card-title"><i class="fas fa-university text-primary me-2"></i>专业外汇分析</h4>
+                            <p class="card-text">
+                                我们的平台聚焦于人民币兑主要国际货币的汇率走势分析，通过多因子模型和机器学习算法，提供专业的市场洞察和交易信号。
+                            </p>
+                            <p class="card-text">
+                                平台覆盖CNY/USD、CNY/EUR、CNY/GBP、CNY/JPY和CNY/AUD五大主要货币对，满足不同投资者的需求。
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-body">
+                            <h4 class="card-title"><i class="fas fa-balance-scale text-primary me-2"></i>风险收益平衡</h4>
+                            <p class="card-text">
+                                每一项投资决策都基于严格的风险控制和收益预期的平衡。我们的系统自动计算夏普比率、最大回撤等关键指标，帮助您在追求收益的同时控制风险。
+                            </p>
+                            <p class="card-text">
+                                通过货币对组合分析，您可以更好地分散投资风险，构建稳健的外汇投资组合。
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 登录模态框 -->
+    <div class="modal fade" id="loginModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">用户登录</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="loginForm">
+                        <div class="mb-3">
+                            <label class="form-label">用户名</label>
+                            <input type="text" class="form-control" id="username" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">密码</label>
+                            <input type="password" class="form-control" id="password" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">登录</button>
+                        <button type="button" class="btn btn-link" id="showRegister">注册账号</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 注册模态框 -->
+    <div class="modal fade" id="registerModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">用户注册</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="registerForm">
+                        <div class="mb-3">
+                            <label class="form-label">用户名</label>
+                            <input type="text" class="form-control" id="reg-username" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">密码</label>
+                            <input type="password" class="form-control" id="reg-password" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">确认密码</label>
+                            <input type="password" class="form-control" id="reg-confirm-password" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">电子邮箱</label>
+                            <input type="email" class="form-control" id="reg-email" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">注册</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 充值模态框 -->
+    <div class="modal fade" id="rechargeModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">账户充值</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="recharge-options">
+                        <div class="recharge-item" data-amount="100">
+                            <h3>¥100</h3>
+                            <p>基础套餐</p>
+                        </div>
+                        <div class="recharge-item" data-amount="500">
+                            <h3>¥500</h3>
+                            <p>进阶套餐</p>
+                        </div>
+                        <div class="recharge-item" data-amount="1000">
+                            <h3>¥1000</h3>
+                            <p>专业套餐</p>
+                        </div>
+                        <div class="recharge-custom">
+                            <label>自定义金额</label>
+                            <input type="number" id="custom-amount" min="1" step="1">
+                        </div>
+                    </div>
+                    <div class="payment-methods mt-3">
+                        <button class="btn btn-payment" data-method="alipay">
+                            支付宝
+                        </button>
+                        <button class="btn btn-payment" data-method="wechat">
+                            微信支付
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 客服面板 -->
+    <div class="cs-panel">
+        <button class="cs-button">
+            <i class="fas fa-headset"></i>
+        </button>
+        <div class="cs-chat-window">
+            <div class="cs-header">
+                <h5>在线客服</h5>
+                <button class="cs-close">×</button>
+            </div>
+            <div class="cs-messages" id="csMessages"></div>
+            <div class="cs-input">
+                <input type="text" id="csInput" placeholder="请输入消息...">
+                <button onclick="sendCustomerMessage()">发送</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 脚本引入 -->
+    <script src="/static/lib/bootstrap/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/lib/flatpickr/flatpickr.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    <script src="/static/script.js"></script>
+</body>
+</html>
