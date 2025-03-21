@@ -5,6 +5,8 @@ import logging
 import sys
 import pandas as pd
 from werkzeug.security import generate_password_hash, check_password_hash
+import os
+import psycopg2
 
 # 添加项目根目录到Python路径
 current_dir = Path(__file__).parent
@@ -23,7 +25,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-app.secret_key = 'your_secret_key'  # 用于session加密
+# Use environment variable for secret key
+app.secret_key = os.environ.get('SECRET_KEY', 'your_secret_key')
 
 # 模拟用户数据库
 users_db = {
@@ -32,6 +35,17 @@ users_db = {
         'email': 'admin@example.com'
     }
 }
+
+class DatabaseManager:
+    def __init__(self):
+        self.conn = psycopg2.connect(
+            host=os.environ.get('DB_HOST', 'localhost'),
+            database=os.environ.get('DB_NAME', 'quant_trading_db'),
+            user=os.environ.get('DB_USER', 'postgres'),
+            password=os.environ.get('DB_PASSWORD', 'jonawong.'),
+            port=os.environ.get('DB_PORT', 5432)
+        )
+        self.cur = self.conn.cursor()
 
 @app.route('/')
 def index():
@@ -320,4 +334,4 @@ def single_backtest():
     return backtest()  # 调用新的回测函数
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=8080, debug=False)
