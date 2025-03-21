@@ -1,0 +1,1 @@
+A simple implementation of the quant trading system. You can build it by issue command: 'docker compose --build' under the directory where docker-compose.yml file lies, and start it by issue command: 'docker compose up -d' for a detached mode. The default listening port is set for 8080, you can set this as you wish.
