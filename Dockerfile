@@ -16,5 +16,5 @@ RUN echo "deb http://mirrors.aliyun.com/debian bookworm main" > /etc/apt/sources
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple
 COPY . .
-EXPOSE 80
+EXPOSE 8080
 CMD ["python", "app.py"]
