@@ -67,6 +67,10 @@ def risk_page():
 def optimize_page():
     return render_template('optimize.html')
 
+@app.route('/register')
+def register_page():
+    return render_template('register.html')
+
 @app.route('/api/optimize_strategy', methods=['POST'])
 def optimize_strategy():
     try:
