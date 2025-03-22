@@ -16,3 +16,4 @@ EOF
 ```
 
 # If the package install process is slow, you can change to the mirror repository.
+We have already done that in the Dockerfile.
