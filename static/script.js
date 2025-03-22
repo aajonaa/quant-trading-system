@@ -3,6 +3,16 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 初始化基本UI功能
     setupBasicUI();
+    
+    // 自动加载风险分析（如果在风险控制页面）
+    const riskContainer = document.getElementById('risk-analysis-container');
+    if (riskContainer) {
+        console.log("检测到风险分析容器，将在页面加载完成后加载数据");
+        setTimeout(function() {
+            console.log("开始加载风险分析数据");
+            loadRiskAnalysis();
+        }, 1000);
+    }
 });
 
 // 设置基本UI功能
@@ -10,7 +20,7 @@ function setupBasicUI() {
     // 初始化日期选择器
     setupDatePickers();
     
-    // 只初始化登录功能
+    // 初始化登录功能
     setupLoginButton();
     
     // 回测表单初始化(如果存在)
@@ -18,17 +28,92 @@ function setupBasicUI() {
     
     // 客服系统初始化
     setupCustomerService();
+    
+    // 如果是风险控制页面，自动加载数据
+    const riskContainer = document.getElementById('risk-analysis-container');
+    if (riskContainer) {
+        console.log("自动加载风险分析数据");
+        setTimeout(loadRiskAnalysis, 500);
+    }
 }
 
-// 设置日期选择器
+// 修改日期选择器设置函数
 function setupDatePickers() {
-    const datepickers = document.querySelectorAll(".datepicker");
-    if (datepickers.length > 0) {
-        flatpickr(datepickers, {
+    // 获取当前日期作为结束日期
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    const endDateStr = `${year}-${month}-${day}`;
+    const startDateStr = '2015-01-28';
+    
+    console.log("设置默认日期:", startDateStr, "到", endDateStr);
+    
+    // 单独初始化每个日期选择器，而不是一次性初始化所有的
+    
+    // 回测分析日期选择器
+    const startDate = document.getElementById('start-date');
+    const endDate = document.getElementById('end-date');
+    if (startDate) {
+        flatpickr(startDate, {
             dateFormat: "Y-m-d",
             locale: "zh",
             minDate: "2015-01-28",
-            maxDate: "today"
+            maxDate: "today",
+            defaultDate: startDateStr
+        });
+    }
+    if (endDate) {
+        flatpickr(endDate, {
+            dateFormat: "Y-m-d",
+            locale: "zh",
+            minDate: "2015-01-28",
+            maxDate: "today",
+            defaultDate: endDateStr
+        });
+    }
+    
+    // 信号解释日期选择器
+    const signalStartDate = document.getElementById('signal-start-date');
+    const signalEndDate = document.getElementById('signal-end-date');
+    if (signalStartDate) {
+        flatpickr(signalStartDate, {
+            dateFormat: "Y-m-d",
+            locale: "zh",
+            minDate: "2015-01-28",
+            maxDate: "today",
+            defaultDate: startDateStr
+        });
+    }
+    if (signalEndDate) {
+        flatpickr(signalEndDate, {
+            dateFormat: "Y-m-d",
+            locale: "zh",
+            minDate: "2015-01-28",
+            maxDate: "today",
+            defaultDate: endDateStr
+        });
+    }
+    
+    // 优化策略日期选择器
+    const optimizeStartDate = document.getElementById('optimize-start-date');
+    const optimizeEndDate = document.getElementById('optimize-end-date');
+    if (optimizeStartDate) {
+        flatpickr(optimizeStartDate, {
+            dateFormat: "Y-m-d",
+            locale: "zh",
+            minDate: "2015-01-28",
+            maxDate: "today",
+            defaultDate: startDateStr
+        });
+    }
+    if (optimizeEndDate) {
+        flatpickr(optimizeEndDate, {
+            dateFormat: "Y-m-d",
+            locale: "zh",
+            minDate: "2015-01-28", 
+            maxDate: "today",
+            defaultDate: endDateStr
         });
     }
 }
@@ -86,7 +171,7 @@ function setupCustomerService() {
     }
 }
 
-// 设置登录按钮
+// 设置登录按钮和相关事件
 function setupLoginButton() {
     // 登录按钮点击事件
     const loginBtn = document.getElementById('loginBtn');
@@ -103,6 +188,22 @@ function setupLoginButton() {
         rechargeBtn.addEventListener('click', function() {
             const rechargeModal = new bootstrap.Modal(document.getElementById('rechargeModal'));
             rechargeModal.show();
+        });
+    }
+    
+    // 注册按钮点击事件
+    const showRegisterBtn = document.getElementById('showRegister');
+    if (showRegisterBtn) {
+        showRegisterBtn.addEventListener('click', function() {
+            // 关闭登录模态框
+            const loginModal = bootstrap.Modal.getInstance(document.getElementById('loginModal'));
+            if (loginModal) loginModal.hide();
+            
+            // 显示注册模态框
+            setTimeout(function() {
+                const registerModal = new bootstrap.Modal(document.getElementById('registerModal'));
+                registerModal.show();
+            }, 300);
         });
     }
     
@@ -134,7 +235,7 @@ function setupLoginButton() {
                 }, 200);
             }
             
-            // 显示单个成功消息
+            // 显示成功消息
             setTimeout(function() {
                 alert('登录成功!');
             }, 300);
@@ -299,9 +400,9 @@ function formatCurrentDate() {
     return `${year}-${month}-${day}`;
 }
 
-// 风险控制数据加载函数
+// 风险控制数据加载函数 - 改为直接从CSV硬编码
 function loadRiskAnalysis() {
-    console.log("开始加载风险分析数据...");
+    console.log("执行风险分析加载函数");
     const riskContainer = document.getElementById('risk-analysis-container');
     if (!riskContainer) {
         console.error("找不到风险分析容器");
@@ -318,30 +419,104 @@ function loadRiskAnalysis() {
         </div>
     `;
     
-    // 从后端API获取风险数据
-    fetch('/api/risk_analysis')
-        .then(response => response.json())
-        .then(result => {
-            console.log("获取到风险数据:", result);
-            if (result.success && result.data) {
-                // 显示风险数据
-                displayRiskAnalysis(result.data);
-            } else {
-                riskContainer.innerHTML = `
-                    <div class="alert alert-danger">
-                        ${result.error || '加载风险分析数据失败'}
-                    </div>
-                `;
-            }
-        })
-        .catch(error => {
-            console.error("风险数据获取错误:", error);
-            riskContainer.innerHTML = `
-                <div class="alert alert-danger">
-                    获取风险数据出错: ${error.message}
-                </div>
-            `;
-        });
+    // 硬编码风险数据（直接从CSV复制）
+    const riskData = [
+        {
+            "货币对组合": "CNYEUR-CNYGBP",
+            "相关系数": "0.5815",
+            "组合波动率": "0.147",
+            "信号一致性": "0.0729",
+            "风险得分": "29.86",
+            "风险等级": "中风险",
+            "交易建议": "建议减小敞口"
+        },
+        {
+            "货币对组合": "CNYAUD-CNYGBP",
+            "相关系数": "0.484",
+            "组合波动率": "0.1664",
+            "信号一致性": "0.0514",
+            "风险得分": "25.89",
+            "风险等级": "中风险",
+            "交易建议": "建议减小敞口"
+        },
+        {
+            "货币对组合": "CNYAUD-CNYEUR",
+            "相关系数": "0.4643",
+            "组合波动率": "0.1522",
+            "信号一致性": "0.0215",
+            "风险得分": "23.79",
+            "风险等级": "中风险",
+            "交易建议": "建议减小敞口"
+        },
+        {
+            "货币对组合": "CNYEUR-CNYJPY",
+            "相关系数": "0.4064",
+            "组合波动率": "0.1389",
+            "信号一致性": "0.0555",
+            "风险得分": "22.09",
+            "风险等级": "中风险",
+            "交易建议": "建议减小敞口"
+        },
+        {
+            "货币对组合": "CNYGBP-CNYJPY",
+            "相关系数": "0.2001",
+            "组合波动率": "0.1404",
+            "信号一致性": "0.0393",
+            "风险得分": "13.4",
+            "风险等级": "低风险",
+            "交易建议": "建议持有"
+        },
+        {
+            "货币对组合": "CNYJPY-CNYUSD",
+            "相关系数": "0.2404",
+            "组合波动率": "0.1078",
+            "信号一致性": "-0.0045",
+            "风险得分": "12.99",
+            "风险等级": "低风险",
+            "交易建议": "建议持有"
+        },
+        {
+            "货币对组合": "CNYAUD-CNYJPY",
+            "相关系数": "0.1955",
+            "组合波动率": "0.1496",
+            "信号一致性": "0.0008",
+            "风险得分": "12.33",
+            "风险等级": "低风险",
+            "交易建议": "建议持有"
+        },
+        {
+            "货币对组合": "CNYEUR-CNYUSD",
+            "相关系数": "0.2003",
+            "组合波动率": "0.0916",
+            "信号一致性": "-0.034",
+            "风险得分": "11.78",
+            "风险等级": "低风险",
+            "交易建议": "建议持有"
+        },
+        {
+            "货币对组合": "CNYGBP-CNYUSD",
+            "相关系数": "0.1026",
+            "组合波动率": "0.1028",
+            "信号一致性": "0.0525",
+            "风险得分": "8.76",
+            "风险等级": "极低风险",
+            "交易建议": "可以增加敞口"
+        },
+        {
+            "货币对组合": "CNYAUD-CNYUSD",
+            "相关系数": "0.0341",
+            "组合波动率": "0.1114",
+            "信号一致性": "-0.011",
+            "风险得分": "5.04",
+            "风险等级": "极低风险",
+            "交易建议": "可以增加敞口"
+        }
+    ];
+    
+    console.log("直接使用硬编码风险数据");
+    
+    // 直接创建并显示风险数据表格
+    displayRiskAnalysis(riskData);
 }
 
 // 显示风险分析结果
